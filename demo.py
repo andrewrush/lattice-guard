@@ -21,10 +21,12 @@ import numpy as np
 from lattice import (
     attack_complexity,
     babai_rounding,
+    compare_basis_quality,
     compare_security_params,
     generate_lwe_instance,
     gs_min_norm,
     kyber_real_params,
+    lll_reduction,
 )
 
 
@@ -177,6 +179,56 @@ def demo_attack_complexity() -> list[dict[str, Any]]:
     return results
 
 
+def demo_basis_reduction(n: int = 16, q: int = 97, seed: int = 42) -> dict[str, Any]:
+    """
+    Демонстрация влияния LLL-редукции на качество базиса и эвристику Бабаи.
+
+    Показывает, что даже после LLL (которая делает базис "хорошим"),
+    Babai rounding остаётся неэффективной для LWE с криптографическими параметрами.
+    """
+    print(f"\n--- Демо: влияние LLL-редукции на Babai rounding ---")
+    print(f"Параметры: n={n}, q={q}, seed={seed}")
+
+    A, b, s, e = generate_lwe_instance(n, q, seed=seed)
+    b_vec = (A @ s + e) % q
+
+    # Random basis
+    v_rand = babai_rounding(A, b_vec)
+    match_rand = int(np.sum(np.mod(v_rand, q) == s))
+
+    # LLL basis
+    A_lll = lll_reduction(A)
+    v_lll = babai_rounding(A_lll, b_vec)
+    match_lll = int(np.sum(np.mod(v_lll, q) == s))
+
+    # Длины векторов
+    rand_norms = [np.linalg.norm(A[:, i]) for i in range(n)]
+    lll_norms = [np.linalg.norm(A_lll[:, i]) for i in range(n)]
+
+    print(f"\nСредняя длина вектора базиса:")
+    print(f"  Random: {statistics.mean(rand_norms):.1f}")
+    print(f"  LLL:    {statistics.mean(lll_norms):.1f}")
+    print(f"  Улучшение: {statistics.mean(rand_norms)/statistics.mean(lll_norms):.1f}×")
+
+    print(f"\nBabai rounding — совпадений с секретом:")
+    print(f"  Random basis: {match_rand}/{n} ({100*match_rand/n:.0f}%)")
+    print(f"  LLL basis:    {match_lll}/{n} ({100*match_lll/n:.0f}%)")
+
+    print(f"\n=> LLL делает базис в ~{statistics.mean(rand_norms)/statistics.mean(lll_norms):.0f} раз короче,")
+    print("=> но Babai rounding всё равно не восстанавливает секрет.")
+    print("=> Для LWE нужно точное решение CVP, а не приближённое.")
+
+    return {
+        "n": n,
+        "seed": seed,
+        "random_avg_norm": round(statistics.mean(rand_norms), 1),
+        "lll_avg_norm": round(statistics.mean(lll_norms), 1),
+        "improvement_factor": round(statistics.mean(rand_norms)/statistics.mean(lll_norms), 1),
+        "random_matches": match_rand,
+        "lll_matches": match_lll,
+    }
+
+
 def interactive_mode() -> dict[str, Any]:
     print("\n--- Интерактивный режим ---")
     try:
@@ -233,6 +285,7 @@ def main() -> None:
     results["kyber_params"] = demo_kyber_comparison()
     results["cvp_attack"] = demo_cvp_attack()
     results["attack_complexity"] = demo_attack_complexity()
+    results["basis_reduction"] = demo_basis_reduction()
 
     if args.interactive:
         results["interactive"] = interactive_mode()

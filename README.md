@@ -258,6 +258,60 @@ Conclusion:
 
 ---
 
+
+## Lattice Reduction: LLL
+
+The project includes a pure-Python implementation of the **LLL (Lenstra-Lenstra-Lovász)** lattice reduction algorithm. This demonstrates a key concept in lattice cryptography: a "good" basis makes the lattice look very different from a "bad" one, but it does **not** break properly constructed LWE.
+
+### What LLL does
+
+LLL transforms a random basis into an equivalent basis that is:
+- **Nearly orthogonal** — vectors are close to 90° to each other
+- **Relatively short** — vector lengths are bounded by a factor of the shortest possible
+
+### Demo: random vs LLL basis
+
+```bash
+python demo.py
+```
+
+Sample output (n=16):
+```
+--- Demo: effect of LLL reduction on Babai rounding ---
+Parameters: n=16, q=97, seed=42
+
+Average basis vector length:
+  Random: 165.3
+  LLL:    25.4
+  Improvement: 6.5×
+
+Babai rounding — matches with secret:
+  Random basis: 1/16 (6%)
+  LLL basis:    1/16 (6%)
+
+=> LLL makes the basis ~6× shorter,
+=> but Babai rounding still does not recover the secret.
+=> LWE requires an exact CVP solution, not an approximation.
+```
+
+### Interpretation
+
+| Basis type | Avg vector length | Babai match rate | Conclusion |
+|-----------|-------------------|------------------|------------|
+| Random | ~165 | ~6% | Bad basis, heuristic fails |
+| LLL-reduced | ~25 | ~6% | Good basis, heuristic **still** fails |
+
+This is the core security argument for LWE: even with a high-quality basis, the **Closest Vector Problem** remains hard because the error vector `e` is carefully chosen to place the target point `b` far from any lattice vector. LLL helps with CVP *approximation*, but LWE is designed to resist exactly that.
+
+### Where this fits in real cryptography
+
+In actual lattice-based schemes (Kyber, Dilithium):
+- The **public key** is a "bad" basis (the LWE instance)
+- The **private key** can be seen as a trapdoor — a "good" basis or equivalent structure
+- LLL alone cannot extract the private key from the public key
+- Breaking the scheme requires solving exact-SVP or exact-CVP, which remain exponentially hard
+
+---
 ## Native C Extension (Optional)
 
 For educational comparison between Python and native C performance on Gram-Schmidt orthogonalization:

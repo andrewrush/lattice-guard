@@ -23,6 +23,8 @@ from lattice import (
     gs_min_norm,
     key_size_bytes,
     kyber_real_params,
+    lll_reduction,
+    _gram_schmidt_coeffs,
 )
 
 # Пытаемся импортировать нативное расширение
@@ -210,6 +212,45 @@ def test_native_limits():
         pass
 
 
+def test_lll_2d_example():
+    """Классический 2D пример: LLL должен найти короткий базис."""
+    B = np.array([[2, 1], [0, 1]], dtype=np.int64)
+    B_lll = lll_reduction(B)
+    # Проверяем, что базис порождает ту же решётку
+    assert abs(np.linalg.det(B_lll)) == abs(np.linalg.det(B))
+    # Проверяем, что векторы короче
+    assert np.linalg.norm(B_lll[:, 0]) <= np.linalg.norm(B[:, 0])
+
+
+def test_lll_lovasz_condition():
+    """Проверка условия Ловаса после LLL."""
+    A, _, _, _ = generate_lwe_instance(8, 97, seed=42)
+    A_lll = lll_reduction(A)
+    mu, norms = _gram_schmidt_coeffs(A_lll)
+    delta = 0.75
+    for k in range(1, 8):
+        assert norms[k] >= (delta - mu[k, k-1]**2) * norms[k-1] - 1e-6,             f"Lovasz failed at k={k}"
+
+
+def test_lll_size_reduction():
+    """Проверка size-reduction после LLL."""
+    A, _, _, _ = generate_lwe_instance(8, 97, seed=42)
+    A_lll = lll_reduction(A)
+    mu, _ = _gram_schmidt_coeffs(A_lll)
+    for i in range(8):
+        for j in range(i):
+            assert abs(mu[i, j]) <= 0.5 + 1e-6,                 f"Size reduction failed at mu[{i},{j}] = {mu[i,j]}"
+
+
+def test_lll_improves_norms():
+    """LLL должен уменьшать среднюю длину векторов."""
+    A, _, _, _ = generate_lwe_instance(12, 97, seed=42)
+    A_lll = lll_reduction(A)
+    avg_before = sum(np.linalg.norm(A[:, i]) for i in range(12)) / 12
+    avg_after = sum(np.linalg.norm(A_lll[:, i]) for i in range(12)) / 12
+    assert avg_after < avg_before, "LLL не уменьшил среднюю длину векторов"
+
+
 def main() -> int:
     verbose = "-v" in sys.argv or "--verbose" in sys.argv
     runner = TestRunner(verbose=verbose)
@@ -228,6 +269,12 @@ def main() -> int:
     runner.add("Invalid n raises error", test_invalid_n)
     runner.add("Invalid q raises error", test_invalid_q)
     runner.add("Singular basis handling", test_singular_basis_warning)
+
+    # LLL tests
+    runner.add("LLL 2D example", test_lll_2d_example)
+    runner.add("LLL Lovasz condition", test_lll_lovasz_condition)
+    runner.add("LLL size reduction", test_lll_size_reduction)
+    runner.add("LLL improves norms", test_lll_improves_norms)
 
     # Native extension tests
     if NATIVE_AVAILABLE:

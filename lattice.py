@@ -243,3 +243,132 @@ def kyber_real_params() -> list[dict]:
         {"name": "ML-KEM-768", "n": 768, "q": 3329, "eta": 2, "du": 10, "dv": 4, "pk_bytes": 1184, "sk_bytes": 2400, "ct_bytes": 1088},
         {"name": "ML-KEM-1024", "n": 1024, "q": 3329, "eta": 2, "du": 11, "dv": 5, "pk_bytes": 1568, "sk_bytes": 3168, "ct_bytes": 1568},
     ]
+
+
+
+def _gram_schmidt_coeffs(B: np.ndarray) -> tuple:
+    """
+    Модифицированный Грама-Шмидт с возвратом коэффициентов mu и норм.
+
+    Returns
+    -------
+    mu : ndarray shape (n, n)
+        Коэффициенты Грама-Шмидта mu[i,j] = <b_i, b_j*> / <b_j*, b_j*>.
+    norms : ndarray shape (n,)
+        Квадраты норм ||b_i*||².
+    """
+    n = B.shape[1]
+    B_star = B.astype(np.float64).copy()
+    mu = np.zeros((n, n), dtype=np.float64)
+    norms = np.zeros(n, dtype=np.float64)
+
+    for i in range(n):
+        for j in range(i):
+            mu[i, j] = np.dot(B_star[:, i], B_star[:, j]) / np.dot(B_star[:, j], B_star[:, j])
+            B_star[:, i] -= mu[i, j] * B_star[:, j]
+        norms[i] = np.dot(B_star[:, i], B_star[:, i])
+
+    return mu, norms
+
+
+def lll_reduction(B: np.ndarray, delta: float = 0.75) -> np.ndarray:
+    """
+    Алгоритм LLL (Lenstra-Lenstra-Lovász) редукции решётки.
+
+    Преобразует базис так, чтобы векторы были почти ортогональны
+    и относительно коротки. Это делает эвристики типа Babai
+    значительно более эффективными.
+
+    Parameters
+    ----------
+    B : ndarray shape (n, n)
+        Исходный базис (столбцы — векторы).
+    delta : float, default 0.75
+        Параметр Ловаса (0.25 < delta < 1). Стандартное значение 0.75.
+
+    Returns
+    -------
+    B_reduced : ndarray shape (n, n)
+        LLL-редуцированный базис.
+    """
+    if not (0.25 < delta < 1.0):
+        raise ValueError("delta должен быть в диапазоне (0.25, 1.0)")
+
+    n = B.shape[1]
+    B_work = B.astype(np.float64).copy()
+
+    k = 1
+    while k < n:
+        mu, norms = _gram_schmidt_coeffs(B_work)
+
+        # Size reduction: уменьшаем коэффициенты mu[k,j]
+        for j in range(k - 1, -1, -1):
+            if abs(mu[k, j]) > 0.5:
+                q = round(mu[k, j])
+                B_work[:, k] -= q * B_work[:, j]
+                # Пересчитываем GS после изменения
+                mu, norms = _gram_schmidt_coeffs(B_work)
+
+        # Lovász condition
+        if norms[k] >= (delta - mu[k, k - 1] ** 2) * norms[k - 1]:
+            k += 1
+        else:
+            # Swap b_k and b_{k-1}
+            temp = B_work[:, k].copy()
+            B_work[:, k] = B_work[:, k - 1]
+            B_work[:, k - 1] = temp
+            k = max(k - 1, 1)
+
+    return np.rint(B_work).astype(np.int64)
+
+
+def compare_basis_quality(A: np.ndarray, s: np.ndarray, e: np.ndarray,
+                          q: int = 97) -> dict:
+    """
+    Сравнивает качество разных типов базисов для атаки Babai.
+
+    Parameters
+    ----------
+    A : ndarray shape (n, n)
+        Публичная матрица (исходный "плохой" базис).
+    s : ndarray shape (n,)
+        Секрет.
+    e : ndarray shape (n,)
+        Ошибка.
+    q : int, default 97
+        Модуль.
+
+    Returns
+    -------
+    dict
+        Результаты для random и LLL базисов.
+    """
+    b = (A @ s + e) % q
+
+    results = {}
+
+    # Random basis (исходный)
+    v = babai_rounding(A, b)
+    v_mod = np.mod(v, q)
+    matches = int(np.sum(v_mod == s))
+    results["random"] = {
+        "matches": matches,
+        "match_percent": round(100 * matches / len(s), 1),
+        "gs_min_norm": round(gs_min_norm(A), 2),
+    }
+
+    # LLL
+    try:
+        A_lll = lll_reduction(A)
+        v = babai_rounding(A_lll, b)
+        v_mod = np.mod(v, q)
+        matches = int(np.sum(v_mod == s))
+        results["lll"] = {
+            "matches": matches,
+            "match_percent": round(100 * matches / len(s), 1),
+            "gs_min_norm": round(gs_min_norm(A_lll), 2),
+        }
+    except Exception as exc:
+        results["lll"] = {"error": str(exc)}
+
+    return results

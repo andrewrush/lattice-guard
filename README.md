@@ -272,7 +272,16 @@ python gs_native.py
 
 The native extension implements **Gram-Schmidt orthogonalization** only. Babai rounding remains in Python (already fast enough at ~0.7 ms). The extension exists to demonstrate FFI and measure the Python interpreter overhead on tight loops.
 
-**Expected speedup:** ~10–15× for n=64 (Python double loop vs C).
+**Measured speedup on Android 12 (aarch64):**
+
+| n | Python (ms) | Native C (ms) | Speedup |
+|---|-------------|---------------|---------|
+| 8 | 0.55 | 0.23 | **2.4×** |
+| 16 | 1.76 | 0.11 | **16×** |
+| 32 | 6.76 | 0.25 | **27×** |
+| 64 | 27.10 | 0.48 | **57×** |
+
+The speedup grows with n because the Python implementation uses nested loops, while the C version eliminates interpreter overhead.
 
 ---
 

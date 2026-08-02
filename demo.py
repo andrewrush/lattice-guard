@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import platform
+import statistics
 import sys
 import time
 from typing import Any
@@ -34,7 +36,7 @@ def print_header() -> None:
 
 
 def demo_security_comparison() -> list[dict[str, Any]]:
-    print("\n--- Сравнение параметров безопасности ---")
+    print("\n--- Сравнение параметров безопасности (упрощённая модель) ---")
     print(
         f"{'Level':>8} | {'n до':>6} | {'n после':>7} | "
         f"{'Ключ до':>9} | {'Ключ после':>10} | {'Экономия':>8}"
@@ -73,7 +75,7 @@ def demo_kyber_comparison() -> list[dict[str, Any]]:
             f"{p['ct_bytes']:>10}"
         )
     print("\nЭто реальные цифры из NIST FIPS 203.")
-    print("Astra #7 позволяет теоретически снизить n на 25-40% при той же security.")
+    print("Astra #7 позволяет теоретически снизить n на 25-40% при той же security (в упрощённой модели).")
     return params
 
 
@@ -98,12 +100,20 @@ def demo_cvp_attack(n: int = 24, q: int = 97, seed: int = 42) -> dict[str, Any]:
     print(f"Совпадений с секретом: {matches}/{n} ({100*matches/n:.0f}%)")
 
     if matches < n:
-        print(f"=> При n={n} атака НЕ удалась полностью.")
-        print("=> При n=512 (реальная криптография) — невозможна за разумное время.")
+        print(f"=> На этом случайном инстансе эвристика Бабаи НЕ восстановила секрет.")
+        print("=> Toy-эксперименты при n=24 НЕ оценивают стойкость при n=512.")
+
+    # Multi-seed statistics
+    stats = demo_cvp_statistics(n, q, num_seeds=100)
+    print(f"\nСтатистика по {stats['num_seeds']} seed (n={n}):")
+    print(f"  Средний процент совпадений: {stats['avg_match_percent']:.1f}%")
+    print(f"  Максимальный процент совпадений: {stats['max_match_percent']:.1f}%")
+    print(f"  Полное восстановление: {stats['full_recovery_rate']:.0f}%")
+    print(f"  Стандартное отклонение: {stats['std_match_percent']:.1f}%")
 
     min_norm = gs_min_norm(A)
     print(f"\nМин. норма GS-ортогонализации: {min_norm:.2f}")
-    print("(На случайном базисе норма велика — атака обречена на провал)")
+    print("(На случайном базисе норма велика — эвристика обречена на провал)")
 
     return {
         "n": n,
@@ -116,11 +126,40 @@ def demo_cvp_attack(n: int = 24, q: int = 97, seed: int = 42) -> dict[str, Any]:
         "secret_first8": s[:8].tolist(),
         "error_first8": e[:8].tolist(),
         "recovered_first8": v_mod[:8].tolist(),
+        "statistics": stats,
+    }
+
+
+def demo_cvp_statistics(n: int, q: int, num_seeds: int = 100) -> dict[str, Any]:
+    """
+    Собирает статистику Babai rounding по множеству случайных seed.
+    Показывает, что эвристика систематически не справляется на случайных базисах.
+    """
+    match_percents = []
+    full_recoveries = 0
+
+    for seed in range(num_seeds):
+        A, b, s, _ = generate_lwe_instance(n, q, seed=seed)
+        v = babai_rounding(A, b)
+        v_mod = np.mod(v, q)
+        matches = int(np.sum(v_mod == s))
+        pct = 100 * matches / n
+        match_percents.append(pct)
+        if matches == n:
+            full_recoveries += 1
+
+    return {
+        "num_seeds": num_seeds,
+        "avg_match_percent": round(statistics.mean(match_percents), 1),
+        "std_match_percent": round(statistics.stdev(match_percents), 1) if len(match_percents) > 1 else 0.0,
+        "max_match_percent": round(max(match_percents), 1),
+        "min_match_percent": round(min(match_percents), 1),
+        "full_recovery_rate": round(100 * full_recoveries / num_seeds, 1),
     }
 
 
 def demo_attack_complexity() -> list[dict[str, Any]]:
-    print("\n--- Оценка сложности атаки BKZ ---")
+    print("\n--- Оценка сложности атаки BKZ (упрощённая модель) ---")
     print(f"{'n':>5} | {'Классика (бит)':>16} | {'С Astra (бит)':>14} | {'Буст':>6}")
     print("-" * 52)
     results = []
@@ -134,7 +173,7 @@ def demo_attack_complexity() -> list[dict[str, Any]]:
             f"+{c['boost_bits']:>4.1f}"
         )
     print("\nAstra #7: полиномиальная трудность CVP-аппроксимации")
-    print("даёт дополнительные ~log₂(n) бит security без увеличения ключа.")
+    print("подразумевает дополнительные ~log₂(n) бит security в этой упрощённой модели.")
     return results
 
 
@@ -157,8 +196,20 @@ def interactive_mode() -> dict[str, Any]:
     except (ValueError, EOFError):
         print("Неверный ввод, использую значения по умолчанию.")
         n, q, seed = 24, 97, 42
-
     return demo_cvp_attack(n, q, seed)
+
+
+def get_meta() -> dict[str, str]:
+    """Метаданные окружения для воспроизводимости."""
+    return {
+        "project": "LatticeGuard",
+        "based_on": "Astra #7",
+        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "python_version": platform.python_version(),
+        "numpy_version": np.__version__,
+        "platform": platform.platform(),
+        "processor": platform.processor() or "unknown",
+    }
 
 
 def main() -> None:
@@ -174,11 +225,7 @@ def main() -> None:
     args = parser.parse_args()
 
     results: dict[str, Any] = {
-        "meta": {
-            "project": "LatticeGuard",
-            "based_on": "Astra #7",
-            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
-        }
+        "meta": get_meta(),
     }
 
     print_header()

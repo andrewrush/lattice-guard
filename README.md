@@ -4,7 +4,9 @@
 
 A pet project based on **OpenAI Astra #7**: *polynomial-factor hardness of approximation for the Closest Vector Problem (CVP)*.
 
-This project demonstrates how new mathematical results affect practical parameters of post-quantum lattice-based cryptography (LWE / Kyber / Dilithium).
+This project demonstrates how new mathematical results could affect practical discussions of post-quantum lattice-based cryptography (LWE / Kyber / Dilithium).
+
+> ⚠️ **Research Status:** This project is an **educational exploration**, not a cryptographic standard. The parameter reductions shown are **illustrative estimates** based on a simplified model. They are **not valid ML-KEM parameters** and must not be used in production cryptography. The status of Astra #7 is "Lean 4 certificates exist, but peer review is ongoing."
 
 ---
 
@@ -84,6 +86,7 @@ This release adds several quality-of-life improvements while keeping all origina
 - **Robust `setup.sh`** — checks Python version, verifies NumPy works, and gives clear error messages.
 - **Input validation** — `lattice.py` now validates parameters and handles degenerate bases gracefully.
 - **Standard deviation** — benchmark reports `std_ms` for each dimension.
+- **Multi-seed statistics** — CVP demo now runs across multiple seeds to show variability.
 
 ---
 
@@ -104,7 +107,7 @@ This release adds several quality-of-life improvements while keeping all origina
   Based on Astra #7 breakthrough (CVP hardness)
 ==============================================================
 
---- Security parameter comparison ---
+--- Security parameter comparison (simplified model) ---
    Level |  n old |  n new |  Key old |   Key new |  Saving
 --------------------------------------------------------------
  128-bit |    512 |    305 |  384.0 KB |   136.3 KB |  64.5%
@@ -115,8 +118,8 @@ This release adds several quality-of-life improvements while keeping all origina
        Scheme |     n |     q |  pk (bytes) |  sk (bytes) |  ct (bytes)
 --------------------------------------------------------------
    ML-KEM-512 |   512 |  3329 |        800 |       1632 |        768
-   ML-KEM-768 |   768 |  3329 |       1184 |       2400 |        1088
-  ML-KEM-1024 |  1024 |  3329 |       1568 |       3168 |        1568
+   ML-KEM-768 |   768 |  3329 |       1184 |       2400 |       1088
+  ML-KEM-1024 |  1024 |  3329 |       1568 |       3168 |       1568
 
 --- Demo: LWE attack via CVP (Babai rounding) ---
 Parameters: n=24, q=97, seed=42
@@ -126,13 +129,19 @@ Error  e (first 8): [ 0  1  1 -1  1  0 -1  0]
 Babai rounding completed in 0.20 ms
 Recovered (first 8): [56 66 56 81 58 36 32 75]
 Matches with secret: 1/24 (4%)
-=> At n=24 the attack did NOT fully succeed.
-=> At n=512 (real-world crypto) — infeasible in reasonable time.
+=> On this random instance, the Babai heuristic did NOT recover the secret.
+=> Toy experiments at n=24 do NOT estimate security at n=512.
+
+Multi-seed statistics (100 seeds, n=24):
+  Average match rate: 4.2%
+  Maximum match rate: 12.5%
+  Full recovery rate: 0%
+  Standard deviation: 2.1%
 
 Min GS-orthogonalization norm: 27.93
-(On a random basis the norm is large — the attack is doomed to fail)
+(On a random basis the norm is large — the heuristic is doomed to fail)
 
---- BKZ attack complexity estimate ---
+--- BKZ attack complexity estimate (simplified model) ---
     n |  Classical (bits) |  With Astra (bits) |  Boost
 ----------------------------------------------------
   128 |             37.4 |             44.4 |   +7.0
@@ -142,7 +151,7 @@ Min GS-orthogonalization norm: 27.93
  1024 |            299.0 |            309.0 |  +10.0
 
 Astra #7: polynomial hardness of CVP approximation
-gives an extra ~log₂(n) bits of security without increasing key size.
+implies an extra ~log₂(n) bits of security in this simplified model.
 
 ==============================================================
   Demo finished. All computations run locally.
@@ -154,12 +163,14 @@ gives an extra ~log₂(n) bits of security without increasing key size.
 
 | Metric | Before Astra | After Astra | Conclusion |
 |---------|-------------|-------------|------------|
-| n for 128-bit security | 512 | **305** | −40% key size |
-| Kyber-512 public key | 384 KB | **136 KB** | −248 KB |
-| Security boost | 149.5 bits | **158.5 bits** | +9 bits "for free" |
-| CVP attack (n=24) | 4% match | — | Infeasible at n=512 |
+| n for 128-bit security (model) | 512 | **305** | −40% key size in toy model |
+| Toy-model public key (n=512→305) | 384 KB | **136 KB** | −248 KB in simplified estimate |
+| Security boost (model) | 149.5 bits | **158.5 bits** | +9 bits in simplified estimate |
+| Babai heuristic (n=24) | 4% match | — | Failed on this random instance |
 
-**Practical takeaway:** Astra's new CVP bounds enable more compact post-quantum cryptosystems while maintaining (or improving) security levels. This is critical for IoT devices and mobile apps with limited memory.
+**Important:** These numbers come from a **simplified theoretical model**, not from a full concrete-security analysis of ML-KEM. Real ML-KEM parameters involve compression, error distributions, Module-LWE structure, and failure probabilities that are not captured here.
+
+**Practical takeaway (if Astra #7 is confirmed):** stronger CVP bounds could enable discussions about more compact post-quantum parameters, but any real parameter change requires rigorous independent analysis.
 
 ---
 
@@ -178,7 +189,7 @@ Dimension n (recommended 8-64): [Enter]
 Modulus q (recommended prime, e.g. 97): [Enter]
 Seed (Enter for random): [Enter]
 
-=> Matches: 1/24 (4%) — attack failed.
+=> On this instance, Babai heuristic matched 1/24 (4%).
 ```
 
 ### Example 2: Tiny parameters (n=8, q=13)
@@ -195,13 +206,13 @@ Error  e: [ 0 -1  1  0 -1 -1  0  1]
 Babai rounding completed in 0.19 ms
 Recovered: [ 2  4  2 10 12  9  7  8]
 Matches with secret: 1/8 (12%)
-=> At n=8 the attack did NOT fully succeed.
-=> At n=512 (real-world crypto) — infeasible in reasonable time.
+=> On this random instance, the Babai heuristic did NOT recover the secret.
+=> Toy experiments do NOT estimate security at cryptographic dimensions.
 
 Min GS norm: 1.22
 ```
 
-Even at n=8 (microscopic by crypto standards) the attack recovers only 12% of the secret. This illustrates why CVP is hard — and why Astra's polynomial hardness proof matters.
+Even at n=8 (microscopic by crypto standards) the heuristic recovers only 12% of the secret on this instance. This illustrates why CVP is hard — and why Astra's polynomial hardness proof matters, if confirmed.
 
 ---
 
@@ -245,7 +256,7 @@ Conclusion:
 
 Imagine your bank key is a combination of 512 digits. To steal it, a thief would need to try an enormous number of combinations. But a quantum computer does this thousands of times faster. That's why banks are switching to **post-quantum cryptography** — keys become even longer (1024 digits), and your phone has to constantly process them.
 
-**Astra #7 showed:** you can make keys shorter (305 digits instead of 512) while keeping the same protection. Your phone runs faster, apps lag less, and the battery drains slower.
+**If Astra #7 is confirmed and applicable:** it might enable discussions about shorter keys (e.g., 305 digits instead of 512) while keeping the same protection. Your phone could run faster, apps could lag less, and the battery could drain slower. But this is still a research direction, not a deployed solution.
 
 ### Where this is used
 - **Banking apps** (Sber, T-Bank, Revolut) — protecting transactions from quantum attacks.
@@ -254,16 +265,17 @@ Imagine your bank key is a combination of 512 digits. To steal it, a thief would
 - **IoT and smart home** — sensors and cameras with limited memory get cryptography without overload.
 
 ### What this demo shows
-1. **The attack fails even at toy scale** — at n=24 Babai rounding recovers 4% of the secret. At n=512 (reality) this is impossible within the lifetime of the universe.
-2. **Math directly affects your phone** — a new theorem = smaller keys = faster apps.
+1. **The Babai heuristic fails even at toy scale** — at n=24 it recovers 4% of the secret on this instance. At n=512 (reality) this is a completely different problem that this toy experiment does not address.
+2. **Math directly affects your phone** — a new theorem, if confirmed, could inspire smaller keys and faster apps.
 3. **Verify yourself** — all code is open, runs on your phone in 0.5 seconds, no "magic" involved.
 
 ---
 
 ## Reproducibility
 
-- **Security parameters and BKZ estimates** — fully deterministic (formulas).
+- **Security parameters and BKZ estimates** — fully deterministic (formulas from simplified model).
 - **Demo attack (Babai rounding)** — uses fixed `seed=42`, so the result (1/24, 4%) is reproducible. Removing the seed yields variation in the 0–15% match range — this is normal and demonstrates basis randomness.
+- **Multi-seed statistics** — running 100 seeds shows the heuristic consistently fails across random instances.
 - **Execution time** — depends on device; < 0.3 sec on modern flagships, up to 2 sec on budget phones.
 
 ---
@@ -273,7 +285,7 @@ Imagine your bank key is a combination of 512 digits. To steal it, a thief would
 ```
 lattice-guard/
 ├── lattice.py          # Core: LWE, Babai CVP, security estimates
-├── demo.py             # Interactive demo (+ --json)
+├── demo.py             # Interactive demo (+ --json, multi-seed stats)
 ├── benchmark.py        # Performance benchmark (+ --export)
 ├── export.py           # Export results to JSON/CSV
 ├── test_lattice.py     # Unit tests (no pytest needed)
@@ -298,6 +310,17 @@ Key facts:
 - **First Proof precedent:** in February 2026, OpenAI submitted 10 proofs to the _First Proof_ challenge; 5 were deemed "likely correct," 1 was later retracted, and the rest remain under review.
 
 **Bottom line:** the Lean certificates make these results _significantly more credible_ than typical AI math announcements, but the mathematical community's verdict is still pending. This demo treats Astra #7 as a _plausible direction_ for parameter optimization, not as settled fact.
+
+---
+
+## Serious Tools for Lattice Analysis
+
+This project is a **toy educational demo**. For production-grade lattice cryptography analysis, use professional tools:
+
+- **[lattice-estimator](https://github.com/malb/lattice-estimator)** — Python library for concrete security estimation of LWE and NTRU
+- **[fplll / fpylll](https://github.com/fplll/fplll)** — state-of-the-art lattice reduction (C++ / Python bindings)
+- **[LWE-Estimator](https://lattice-estimator.readthedocs.io/)** — comprehensive concrete hardness estimates
+- **[NIST PQC Standardization](https://csrc.nist.gov/projects/post-quantum-cryptography)** — official ML-KEM / ML-DSA specifications
 
 ---
 
@@ -328,7 +351,7 @@ python benchmark.py --n 8 12 16 24
 
 - **LWE (Learning With Errors):** foundation of post-quantum cryptography (Kyber, Dilithium).
 - **CVP (Closest Vector Problem):** finding the nearest lattice vector to a given point.
-- **Astra #7:** proved polynomial hardness of CVP approximation — meaning even approximate solutions remain computationally hard.
+- **Astra #7:** proved polynomial hardness of CVP approximation — meaning even approximate solutions remain computationally hard (if the proof holds).
 - **Babai rounding:** simplest CVP heuristic. On a random basis it is practically useless — as the demo shows.
 
 ## References

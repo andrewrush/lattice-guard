@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import platform
 import statistics
 import sys
 import time
@@ -34,22 +35,6 @@ def benchmark_cvp(
     """
     Измеряет время выполнения Babai rounding для разных n.
     Для точности используется адаптивное количество прогонов.
-
-    Parameters
-    ----------
-    n_values : list[int]
-        Список размерностей для тестирования.
-    q : int, default 97
-        Модуль.
-    base_seed : int, default 42
-        Базовый seed.
-    verbose : bool, default True
-        Выводить таблицу в stdout.
-
-    Returns
-    -------
-    list[dict]
-        Результаты бенчмарка.
     """
     if verbose:
         print("=" * 62)
@@ -131,6 +116,18 @@ def benchmark_cvp(
     return results
 
 
+def get_meta() -> dict[str, str]:
+    return {
+        "project": "LatticeGuard",
+        "benchmark": "CVP Babai rounding",
+        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "python_version": platform.python_version(),
+        "numpy_version": np.__version__,
+        "platform": platform.platform(),
+        "processor": platform.processor() or "unknown",
+    }
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="LatticeGuard — бенчмарк CVP")
     parser.add_argument(
@@ -149,12 +146,7 @@ def main() -> None:
     results = benchmark_cvp(n_values, q=97, verbose=not args.json)
 
     payload = {
-        "meta": {
-            "project": "LatticeGuard",
-            "benchmark": "CVP Babai rounding",
-            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
-            "platform": sys.platform,
-        },
+        "meta": get_meta(),
         "results": results,
     }
 

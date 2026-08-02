@@ -91,7 +91,7 @@ This release adds several quality-of-life improvements while keeping all origina
 
 ### Environment
 - Device: Android 12, aarch64
-- **Termux:** v0.118
+- **Termux**
 - **Python:** 3.13.13
 - **NumPy:** 2.4.4
 - **Launch time:** ~0.5 sec

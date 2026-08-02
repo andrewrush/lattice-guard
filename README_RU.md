@@ -91,7 +91,7 @@ python benchmark.py --export /sdcard/lattice_benchmark.json
 
 ### Окружение
 - Устройство на Android 12, aarch64
-- **Termux:** v0.118
+- **Termux**
 - **Python:** 3.13.13
 - **NumPy:** 2.4.4
 - **Время запуска:** ~0.5 сек

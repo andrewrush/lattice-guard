@@ -121,6 +121,7 @@ if __name__ == "__main__":
         print("Compile first: cd native && bash build.sh")
         exit(1)
 
+    max_error = 0.0
     for n in [8, 16, 32, 64]:
         A, _, _, _ = generate_lwe_instance(n, 97, seed=42)
 
@@ -132,10 +133,16 @@ if __name__ == "__main__":
         r2 = gs_min_norm_native(A)
         t3 = time.perf_counter()
 
-        match = abs(r1 - r2) < 1e-6
+        err = abs(r1 - r2)
+        max_error = max(max_error, err)
+        match = err < 1e-12
+
         print(
             f"n={n:>2} | "
             f"Python: {r1:.4f} in {(t1-t0)*1000:>7.3f} ms | "
             f"Native: {r2:.4f} in {(t3-t2)*1000:>7.3f} ms | "
-            f"Match: {match}"
+            f"Match: {match} | err={err:.2e}"
         )
+
+    print(f"\nmax_abs_error(Python, C) = {max_error:.2e}")
+    print(f"Numerical equivalence: {max_error < 1e-12}")

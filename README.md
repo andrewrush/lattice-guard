@@ -144,6 +144,9 @@ Multi-seed statistics (100 seeds, n=24):
   Full recovery rate: 0%
   Standard deviation: 1.9%
 
+  Note: At n=24, a single matching coordinate equals ~4.17%. Match rates are discrete
+  and should not be over-interpreted as precise probabilities in this toy setting.
+
 Min GS-orthogonalization norm: 27.93
 (On an unreduced random basis the norm is large — the Babai heuristic is ineffective for this toy instance)
 
@@ -291,7 +294,7 @@ Babai rounding — matches with secret:
 
 => LLL makes the basis ~6× shorter,
 => but Babai rounding still does not recover the secret.
-=> LWE requires an exact CVP solution, not an approximation.
+=> This toy experiment does not model the full range of lattice attacks against LWE, which may use approximate reduction, enumeration, sieving, decoding, or primal/dual strategies. LLL alone does not provide a concrete security estimate for LWE.
 ```
 
 ### Interpretation
@@ -305,11 +308,11 @@ This is the core security argument for LWE: even with a high-quality basis, the 
 
 ### Where this fits in real cryptography
 
-In actual lattice-based schemes (Kyber, Dilithium):
-- The **public key** is a "bad" basis (the LWE instance)
-- The **private key** can be seen as a trapdoor — a "good" basis or equivalent structure
-- LLL alone cannot extract the private key from the public key
-- Breaking the scheme requires solving exact-SVP or exact-CVP, which remain exponentially hard
+In lattice-based cryptography:
+- A public LWE instance can be embedded into a lattice basis that is unsuitable for known attacks.
+- This should not be interpreted as saying that the secret key is literally a short or reduced basis. The exact relation between public parameters and secret key depends on the specific scheme and attack formulation.
+- ML-KEM (Kyber) uses Module-LWE, not a simple trapdoor lattice scheme in the GPV/Falcon sense.
+- LLL alone cannot break properly parameterised LWE.
 
 ---
 ## Native C Extension (Optional)
@@ -336,6 +339,8 @@ The native extension implements **Gram-Schmidt orthogonalization** only. Babai r
 | 64 | 27.10 | 0.48 | **57×** |
 
 The speedup grows with n because the Python implementation uses nested loops, while the C version eliminates interpreter overhead.
+
+**Numerical equivalence:** `max_abs_error(Python, C) < 1e-12` for all tested dimensions.
 
 > **Note:** These numbers measure only the explicit Gram–Schmidt loops. The main `benchmark.py` measures the complete NumPy-based routine (including `np.linalg.solve` for Babai), which is why its times differ. The native extension changes performance only; it does not change the security model or attack success probability.
 

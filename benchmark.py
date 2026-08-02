@@ -2,6 +2,8 @@
 """
 LatticeGuard — бенчмарк производительности.
 Запуск: python benchmark.py
+        python benchmark.py --json
+        python benchmark.py --export results.json
 
 На современных телефонах с оптимизированным NumPy/BLAS
 даже n=64 обрабатывается за доли миллисекунды.
@@ -9,25 +11,60 @@ LatticeGuard — бенчмарк производительности.
 поэтому рост времени слабее теоретического O(n³).
 """
 
+from __future__ import annotations
+
+import argparse
+import json
+import statistics
+import sys
 import time
+from typing import Any
+
 import numpy as np
+
 from lattice import generate_lwe_instance, babai_rounding, gs_min_norm
 
 
-def benchmark_cvp(n_values, q=97, base_seed=42):
+def benchmark_cvp(
+    n_values: list[int],
+    q: int = 97,
+    base_seed: int = 42,
+    verbose: bool = True,
+) -> list[dict[str, Any]]:
     """
     Измеряет время выполнения Babai rounding для разных n.
     Для точности используется адаптивное количество прогонов.
+
+    Parameters
+    ----------
+    n_values : list[int]
+        Список размерностей для тестирования.
+    q : int, default 97
+        Модуль.
+    base_seed : int, default 42
+        Базовый seed.
+    verbose : bool, default True
+        Выводить таблицу в stdout.
+
+    Returns
+    -------
+    list[dict]
+        Результаты бенчмарка.
     """
-    print("=" * 62)
-    print("  LatticeGuard — бенчмарк CVP (Babai rounding)")
-    print("=" * 62)
-    print(f"\n{'n':>5} | {'Среднее (мс)':>12} | {'Прогонов':>8} | {'Совпад.':>8} | {'GS норма':>9} | {'Отн. время':>10}")
-    print("-" * 72)
+    if verbose:
+        print("=" * 62)
+        print("  LatticeGuard — бенчмарк CVP (Babai rounding)")
+        print("=" * 62)
+        print(
+            f"\n{'n':>5} | {'Среднее (мс)':>12} | {'Стд.откл.':>9} | "
+            f"{'Прогонов':>8} | {'Совпад.':>8} | {'GS норма':>9} | {'Отн. время':>10}"
+        )
+        print("-" * 78)
 
     baseline_time = None
+    results = []
 
-    for n in n_values:
+    for idx, n in enumerate(n_values):
         # Адаптивное количество прогонов
         if n <= 12:
             runs = 1000
@@ -42,7 +79,7 @@ def benchmark_cvp(n_values, q=97, base_seed=42):
         A_w, b_w, _, _ = generate_lwe_instance(n, q, seed=base_seed)
         _ = babai_rounding(A_w, b_w)
 
-        total_time = 0.0
+        times = []
         total_matches = 0.0
 
         for r in range(runs):
@@ -50,13 +87,14 @@ def benchmark_cvp(n_values, q=97, base_seed=42):
             start = time.perf_counter()
             v = babai_rounding(A, b)
             elapsed = (time.perf_counter() - start) * 1000
-            total_time += elapsed
+            times.append(elapsed)
 
             v_mod = np.mod(v, q)
             matches = int(np.sum(v_mod == s))
             total_matches += 100 * matches / n
 
-        avg_time = total_time / runs
+        avg_time = statistics.mean(times)
+        std_time = statistics.stdev(times) if len(times) > 1 else 0.0
         avg_match = total_matches / runs
         min_norm = gs_min_norm(A)
 
@@ -66,20 +104,67 @@ def benchmark_cvp(n_values, q=97, base_seed=42):
         else:
             relative = avg_time / baseline_time
 
-        print(
-            f"{n:>5} | {avg_time:>12.4f} | {runs:>8} | {avg_match:>7.1f}% | {min_norm:>9.2f} | "
-            f"{relative:>9.2f}x"
-        )
+        if verbose:
+            print(
+                f"{n:>5} | {avg_time:>12.4f} | {std_time:>9.4f} | "
+                f"{runs:>8} | {avg_match:>7.1f}% | {min_norm:>9.2f} | "
+                f"{relative:>9.2f}x"
+            )
 
-    print("\nВывод:")
-    print("• На малых n (8–24) время почти не растёт — доминируют накладные расходы Python/NumPy.")
-    print("• При n=64 время ~3× больше, чем при n=8, а не 512× (как чистая теория O(n³)).")
-    print("• Это потому что np.linalg.solve использует оптимизированные BLAS/SIMD на aarch64.")
-    print("• Точность атаки (совпадения) остаётся близкой к нулю на случайном базисе.")
+        results.append({
+            "n": n,
+            "avg_ms": round(avg_time, 4),
+            "std_ms": round(std_time, 4),
+            "runs": runs,
+            "avg_match_percent": round(avg_match, 1),
+            "gs_min_norm": round(min_norm, 2),
+            "relative_time": round(relative, 2),
+        })
+
+    if verbose:
+        print("\nВывод:")
+        print("• На малых n (8–24) время почти не растёт — доминируют накладные расходы Python/NumPy.")
+        print("• При n=64 время ~3× больше, чем при n=8, а не 512× (как чистая теория O(n³)).")
+        print("• Это потому что np.linalg.solve использует оптимизированные BLAS/SIMD на aarch64.")
+        print("• Точность атаки (совпадения) остаётся близкой к нулю на случайном базисе.")
+
+    return results
 
 
-def main():
-    benchmark_cvp([8, 12, 16, 20, 24, 32, 48, 64], q=97)
+def main() -> None:
+    parser = argparse.ArgumentParser(description="LatticeGuard — бенчмарк CVP")
+    parser.add_argument(
+        "--json", action="store_true", help="Вывести результаты в JSON"
+    )
+    parser.add_argument(
+        "--export", metavar="FILE", help="Сохранить результаты в JSON-файл"
+    )
+    parser.add_argument(
+        "--n", type=int, nargs="+", default=None,
+        help="Список размерностей (по умолчанию: 8 12 16 20 24 32 48 64)"
+    )
+    args = parser.parse_args()
+
+    n_values = args.n if args.n else [8, 12, 16, 20, 24, 32, 48, 64]
+    results = benchmark_cvp(n_values, q=97, verbose=not args.json)
+
+    payload = {
+        "meta": {
+            "project": "LatticeGuard",
+            "benchmark": "CVP Babai rounding",
+            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "platform": sys.platform,
+        },
+        "results": results,
+    }
+
+    if args.json:
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+
+    if args.export:
+        with open(args.export, "w", encoding="utf-8") as f:
+            json.dump(payload, f, indent=2, ensure_ascii=False)
+        print(f"\nРезультаты сохранены в {args.export}")
 
 
 if __name__ == "__main__":

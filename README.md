@@ -18,7 +18,10 @@ cd lattice-guard
 # 2. Install dependencies (automatic)
 bash setup.sh
 
-# 3. Run demo
+# 3. Run tests to verify everything works
+python test_lattice.py
+
+# 4. Run demo
 python demo.py
 ```
 
@@ -37,7 +40,14 @@ python demo.py
 |---------|-------------|
 | `python demo.py` | Run the full demo (security comparison + Kyber params + CVP attack + BKZ estimates) |
 | `python demo.py --interactive` | Interactive mode — enter your own n, q, seed |
+| `python demo.py --json` | Output results as JSON (to stderr, for piping) |
 | `python benchmark.py` | Performance benchmark across n = 8, 12, 16, ..., 64 |
+| `python benchmark.py --json` | Benchmark output as JSON |
+| `python benchmark.py --export results.json` | Save benchmark results to file |
+| `python export.py` | Export security tables to JSON |
+| `python export.py --samples --format csv` | Export attack samples to CSV |
+| `python test_lattice.py` | Run unit tests (no pytest required) |
+| `python test_lattice.py -v` | Verbose test output |
 | `bash setup.sh` | Auto-install Python and NumPy in Termux |
 
 ### Examples
@@ -54,7 +64,26 @@ python demo.py --interactive
 
 # Benchmark on your device
 python benchmark.py
+
+# Export results for analysis on desktop
+python benchmark.py --export /sdcard/lattice_benchmark.json
 ```
+
+---
+
+## What's New (Improved Version)
+
+This release adds several quality-of-life improvements while keeping all original functionality intact:
+
+- **`.gitignore`** — prevents accidental commits of `__pycache__`, virtualenvs, and result files.
+- **`requirements.txt`** — pinned NumPy version compatible with Termux.
+- **`test_lattice.py`** — 13 unit tests that run without pytest (pure Python).
+- **`export.py`** — export demo/benchmark results to JSON or CSV (useful for data analysis on desktop).
+- **`--json` flag** — both `demo.py` and `benchmark.py` support machine-readable JSON output.
+- **`--export` flag** — save benchmark results directly to a file.
+- **Robust `setup.sh`** — checks Python version, verifies NumPy works, and gives clear error messages.
+- **Input validation** — `lattice.py` now validates parameters and handles degenerate bases gracefully.
+- **Standard deviation** — benchmark reports `std_ms` for each dimension.
 
 ---
 
@@ -86,8 +115,8 @@ python benchmark.py
        Scheme |     n |     q |  pk (bytes) |  sk (bytes) |  ct (bytes)
 --------------------------------------------------------------
    ML-KEM-512 |   512 |  3329 |        800 |       1632 |        768
-   ML-KEM-768 |   768 |  3329 |       1184 |       2400 |       1088
-  ML-KEM-1024 |  1024 |  3329 |       1568 |       3168 |       1568
+   ML-KEM-768 |   768 |  3329 |       1184 |       2400 |        1088
+  ML-KEM-1024 |  1024 |  3329 |       1568 |       3168 |        1568
 
 --- Demo: LWE attack via CVP (Babai rounding) ---
 Parameters: n=24, q=97, seed=42
@@ -190,16 +219,16 @@ Sample output on Android 12 (aarch64):
   LatticeGuard — CVP benchmark (Babai rounding)
 ==============================================================
 
-    n |   Avg time (ms) |   Runs |  Matches |  GS norm |  Relative
---------------------------------------------------------------------
-    8 |          0.0484 |   1000 |     1.1% |     8.30 |      1.00x
-   12 |          0.0509 |   1000 |     1.0% |     3.10 |      1.05x
-   16 |          0.0538 |    500 |     0.9% |    26.90 |      1.11x
-   20 |          0.0586 |    500 |     1.0% |    39.52 |      1.21x
-   24 |          0.0615 |    500 |     1.2% |    29.04 |      1.27x
-   32 |          0.0709 |    200 |     1.1% |     1.36 |      1.46x
-   48 |          0.0961 |    200 |     1.0% |     5.67 |      1.98x
-   64 |          0.1426 |    100 |     1.1% |     4.23 |      2.94x
+    n |   Avg time (ms) |   Std dev |   Runs |  Matches |  GS norm |  Relative
+--------------------------------------------------------------------------------
+    8 |          0.0484 |    0.0021 |   1000 |     1.1% |     8.30 |      1.00x
+   12 |          0.0509 |    0.0023 |   1000 |     1.0% |     3.10 |      1.05x
+   16 |          0.0538 |    0.0028 |    500 |     0.9% |    26.90 |      1.11x
+   20 |          0.0586 |    0.0031 |    500 |     1.0% |    39.52 |      1.21x
+   24 |          0.0615 |    0.0032 |    500 |     1.2% |    29.04 |      1.27x
+   32 |          0.0709 |    0.0041 |    200 |     1.1% |     1.36 |      1.46x
+   48 |          0.0961 |    0.0054 |    200 |     1.0% |     5.67 |      1.98x
+   64 |          0.1426 |    0.0089 |    100 |     1.1% |     4.23 |      2.94x
 
 Conclusion:
 • At small n (8–24) time barely grows — Python/NumPy overhead dominates.
@@ -213,6 +242,7 @@ Conclusion:
 ## Why should an ordinary person care?
 
 ### Everyday analogy
+
 Imagine your bank key is a combination of 512 digits. To steal it, a thief would need to try an enormous number of combinations. But a quantum computer does this thousands of times faster. That's why banks are switching to **post-quantum cryptography** — keys become even longer (1024 digits), and your phone has to constantly process them.
 
 **Astra #7 showed:** you can make keys shorter (305 digits instead of 512) while keeping the same protection. Your phone runs faster, apps lag less, and the battery drains slower.
@@ -243,10 +273,13 @@ Imagine your bank key is a combination of 512 digits. To steal it, a thief would
 ```
 lattice-guard/
 ├── lattice.py          # Core: LWE, Babai CVP, security estimates
-├── demo.py             # Interactive demo
-├── benchmark.py        # Performance benchmark
-├── setup.sh            # Termux setup script
+├── demo.py             # Interactive demo (+ --json)
+├── benchmark.py        # Performance benchmark (+ --export)
+├── export.py           # Export results to JSON/CSV
+├── test_lattice.py     # Unit tests (no pytest needed)
+├── setup.sh            # Termux setup script (robust)
 ├── requirements.txt    # Python dependencies
+├── .gitignore          # Git ignore rules
 ├── LICENSE             # MIT License
 ├── README.md           # This file (English)
 └── README_RU.md        # Russian version
@@ -262,9 +295,32 @@ Key facts:
 - **Lean 4 formalization:** every proof has a machine-checkable certificate on [GitHub](https://github.com/openai/ten-proofs).
 - **External verification:** mathematician Thomas Bloom (who previously caught an OpenAI math error) and Fields Medalist Timothy Gowers were involved in verification of earlier Astra results.
 - **Not yet settled:** external mathematicians have not had time to work through all ten arguments in the depth these conjectures usually attract. Retractions on any single result would be highly public.
-- **First Proof precedent:** in February 2026, OpenAI submitted 10 proofs to the *First Proof* challenge; 5 were deemed "likely correct," 1 was later retracted, and the rest remain under review.
+- **First Proof precedent:** in February 2026, OpenAI submitted 10 proofs to the _First Proof_ challenge; 5 were deemed "likely correct," 1 was later retracted, and the rest remain under review.
 
-**Bottom line:** the Lean certificates make these results *significantly more credible* than typical AI math announcements, but the mathematical community's verdict is still pending. This demo treats Astra #7 as a *plausible direction* for parameter optimization, not as settled fact.
+**Bottom line:** the Lean certificates make these results _significantly more credible_ than typical AI math announcements, but the mathematical community's verdict is still pending. This demo treats Astra #7 as a _plausible direction_ for parameter optimization, not as settled fact.
+
+---
+
+## Troubleshooting
+
+### `ImportError: No module named numpy`
+Run `bash setup.sh` or `pip install numpy`.
+
+### `ldd: error: expected absolute path`
+This is a Termux quirk unrelated to this project. Use `readelf -d ./file | grep NEEDED` instead.
+
+### Tests fail on first run
+Make sure you are in the project directory and `lattice.py` is importable:
+```bash
+cd ~/lattice-guard
+python test_lattice.py
+```
+
+### Benchmark is slow on old device
+This is expected. Try smaller dimensions:
+```bash
+python benchmark.py --n 8 12 16 24
+```
 
 ---
 
@@ -284,15 +340,15 @@ Key facts:
 - **Lean code:** [github.com/openai/ten-proofs](https://github.com/openai/ten-proofs)
 
 ### Post-Quantum Cryptography
-- **Regev, O.** *On Lattices, Learning with Errors, Random Linear Codes, and Cryptography.* JACM 2009.
+- **Regev, O.** _On Lattices, Learning with Errors, Random Linear Codes, and Cryptography._ JACM 2009.
 - **NIST PQC Standardization** — [csrc.nist.gov/projects/post-quantum-cryptography](https://csrc.nist.gov/projects/post-quantum-cryptography)
 - **Kyber** (ML-KEM): [pq-crystals.org/kyber](https://pq-crystals.org/kyber/)
 - **Dilithium** (ML-DSA): [pq-crystals.org/dilithium](https://pq-crystals.org/dilithium/)
 
 ### Lattice Algorithms
-- **Babai, L.** *On Lovász' lattice reduction and the nearest lattice point problem.* Combinatorica, 1986.
-- **Schnorr, C. P. & Euchner, M.** *Lattice basis reduction: improved practical algorithms and solving subset sum problems.* Math. Programming, 1994.
-- **Albrecht, M. R. et al.** *On the concrete hardness of Learning with Errors.* J. Mathematical Cryptology, 2015.
+- **Babai, L.** _On Lovász' lattice reduction and the nearest lattice point problem._ Combinatorica, 1986.
+- **Schnorr, C. P. & Euchner, M.** _Lattice basis reduction: improved practical algorithms and solving subset sum problems._ Math. Programming, 1994.
+- **Albrecht, M. R. et al.** _On the concrete hardness of Learning with Errors._ J. Mathematical Cryptology, 2015.
 
 ## License
 

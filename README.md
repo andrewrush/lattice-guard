@@ -220,7 +220,7 @@ Matches with secret: 1/8 (12%)
 Min GS norm: 1.22
 ```
 
-Even at n=8 (microscopic by crypto standards) the heuristic recovers only 12% of the secret on this instance. This illustrates that unreduced random bases are unsuitable for recovering this toy instance with the Babai heuristic — and why Astra's polynomial hardness proof matters, if confirmed.
+Even at n=8 (microscopic by crypto standards) the heuristic recovers only 12% of the secret on this instance. This illustrates that unreduced random bases are unsuitable for recovering this toy instance with the Babai heuristic — and why a rigorous hardness result for approximate CVP could matter, if confirmed and shown to apply to the relevant cryptographic setting.
 
 ---
 
@@ -251,7 +251,7 @@ Sample output on Android 12 (aarch64):
 
 Conclusion:
 • At small n (8–24) time barely grows — Python/NumPy overhead dominates.
-• At n=64 time is ~3× vs n=8, not 512× (pure theory O(n³)).
+• At n=64 time is ~3× vs n=8. The idealized cubic ratio would be 512×, but fixed overhead (Python interpreter, NumPy dispatch) and optimized BLAS dominate at this scale.
 • This is because np.linalg.solve uses optimized BLAS/SIMD on aarch64.
 • Attack accuracy stays near zero on a random basis.
 ```
@@ -282,6 +282,8 @@ The native extension implements **Gram-Schmidt orthogonalization** only. Babai r
 | 64 | 27.10 | 0.48 | **57×** |
 
 The speedup grows with n because the Python implementation uses nested loops, while the C version eliminates interpreter overhead.
+
+> **Note:** These numbers measure only the explicit Gram–Schmidt loops. The main `benchmark.py` measures the complete NumPy-based routine (including `np.linalg.solve` for Babai), which is why its times differ. The native extension changes performance only; it does not change the security model or attack success probability.
 
 ---
 

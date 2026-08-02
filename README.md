@@ -20,10 +20,13 @@ cd lattice-guard
 # 2. Install dependencies (automatic)
 bash setup.sh
 
-# 3. Run tests to verify everything works
+# 3. (Optional) Compile native extension for Gram-Schmidt speed comparison
+bash native/build.sh
+
+# 4. Run tests to verify everything works
 python test_lattice.py
 
-# 4. Run demo
+# 5. Run demo
 python demo.py
 ```
 
@@ -50,7 +53,9 @@ python demo.py
 | `python export.py --samples --format csv` | Export attack samples to CSV |
 | `python test_lattice.py` | Run unit tests (no pytest required) |
 | `python test_lattice.py -v` | Verbose test output |
+| `python gs_native.py` | Test native C extension (Gram-Schmidt only, if compiled) |
 | `bash setup.sh` | Auto-install Python and NumPy in Termux |
+| `bash native/build.sh` | Compile C extension for Gram-Schmidt |
 
 ### Examples
 
@@ -79,7 +84,7 @@ This release adds several quality-of-life improvements while keeping all origina
 
 - **`.gitignore`** — prevents accidental commits of `__pycache__`, virtualenvs, and result files.
 - **`requirements.txt`** — pinned NumPy version compatible with Termux.
-- **`test_lattice.py`** — 13 unit tests that run without pytest (pure Python).
+- **`test_lattice.py`** — 13 unit tests that run without pytest (pure Python), plus 3 native extension tests.
 - **`export.py`** — export demo/benchmark results to JSON or CSV (useful for data analysis on desktop).
 - **`--json` flag** — both `demo.py` and `benchmark.py` support machine-readable JSON output.
 - **`--export` flag** — save benchmark results directly to a file.
@@ -87,6 +92,7 @@ This release adds several quality-of-life improvements while keeping all origina
 - **Input validation** — `lattice.py` now validates parameters and handles degenerate bases gracefully.
 - **Standard deviation** — benchmark reports `std_ms` for each dimension.
 - **Multi-seed statistics** — CVP demo now runs across multiple seeds to show variability.
+- **Native C extension** — optional `gs_native.c` with Python bindings via `ctypes` for Gram-Schmidt performance comparison.
 
 ---
 
@@ -114,7 +120,7 @@ This release adds several quality-of-life improvements while keeping all origina
  192-bit |    768 |    446 |  864.0 KB |   291.4 KB |  66.3%
  256-bit |   1024 |    584 | 1536.0 KB |   499.6 KB |  67.5%
 
---- Real NIST Kyber parameters (ML-KEM) ---
+--- Reference ML-KEM parameter sets (shown for comparison, not modified by this project) ---
        Scheme |     n |     q |  pk (bytes) |  sk (bytes) |  ct (bytes)
 --------------------------------------------------------------
    ML-KEM-512 |   512 |  3329 |        800 |       1632 |        768
@@ -130,16 +136,16 @@ Babai rounding completed in 0.20 ms
 Recovered (first 8): [56 66 56 81 58 36 32 75]
 Matches with secret: 1/24 (4%)
 => On this random instance, the Babai heuristic did NOT recover the secret.
-=> Toy experiments at n=24 do NOT estimate security at n=512.
+=> At cryptographic dimensions, this toy experiment is not an attack-cost estimate.
 
 Multi-seed statistics (100 seeds, n=24):
-  Average match rate: 4.2%
-  Maximum match rate: 12.5%
+  Average match rate: 0.9%
+  Maximum match rate: 8.3%
   Full recovery rate: 0%
-  Standard deviation: 2.1%
+  Standard deviation: 1.9%
 
 Min GS-orthogonalization norm: 27.93
-(On a random basis the norm is large — the heuristic is doomed to fail)
+(On an unreduced random basis the norm is large — the Babai heuristic is ineffective for this toy instance)
 
 --- BKZ attack complexity estimate (simplified model) ---
     n |  Classical (bits) |  With Astra (bits) |  Boost
@@ -150,8 +156,8 @@ Min GS-orthogonalization norm: 27.93
   768 |            224.3 |            233.8 |   +9.6
  1024 |            299.0 |            309.0 |  +10.0
 
-Astra #7: polynomial hardness of CVP approximation
-implies an extra ~log₂(n) bits of security in this simplified model.
+Under the simplified model used here, the assumed Astra-style factor
+is represented as an approximately log₂(n)-bit increase.
 
 ==============================================================
   Demo finished. All computations run locally.
@@ -169,6 +175,8 @@ implies an extra ~log₂(n) bits of security in this simplified model.
 | Babai heuristic (n=24) | 4% match | — | Failed on this random instance |
 
 **Important:** These numbers come from a **simplified theoretical model**, not from a full concrete-security analysis of ML-KEM. Real ML-KEM parameters involve compression, error distributions, Module-LWE structure, and failure probabilities that are not captured here.
+
+**Formula used:** `toy_key_size = n² · ⌈log₂(q)⌉ / 8` bytes. This is **not** the actual ML-KEM public key size.
 
 **Practical takeaway (if Astra #7 is confirmed):** stronger CVP bounds could enable discussions about more compact post-quantum parameters, but any real parameter change requires rigorous independent analysis.
 
@@ -207,12 +215,12 @@ Babai rounding completed in 0.19 ms
 Recovered: [ 2  4  2 10 12  9  7  8]
 Matches with secret: 1/8 (12%)
 => On this random instance, the Babai heuristic did NOT recover the secret.
-=> Toy experiments do NOT estimate security at cryptographic dimensions.
+=> At cryptographic dimensions, this toy experiment is not an attack-cost estimate.
 
 Min GS norm: 1.22
 ```
 
-Even at n=8 (microscopic by crypto standards) the heuristic recovers only 12% of the secret on this instance. This illustrates why CVP is hard — and why Astra's polynomial hardness proof matters, if confirmed.
+Even at n=8 (microscopic by crypto standards) the heuristic recovers only 12% of the secret on this instance. This illustrates that unreduced random bases are unsuitable for recovering this toy instance with the Babai heuristic — and why Astra's polynomial hardness proof matters, if confirmed.
 
 ---
 
@@ -250,13 +258,31 @@ Conclusion:
 
 ---
 
+## Native C Extension (Optional)
+
+For educational comparison between Python and native C performance on Gram-Schmidt orthogonalization:
+
+```bash
+# Compile
+bash native/build.sh
+
+# Test
+python gs_native.py
+```
+
+The native extension implements **Gram-Schmidt orthogonalization** only. Babai rounding remains in Python (already fast enough at ~0.7 ms). The extension exists to demonstrate FFI and measure the Python interpreter overhead on tight loops.
+
+**Expected speedup:** ~10–15× for n=64 (Python double loop vs C).
+
+---
+
 ## Why should an ordinary person care?
 
 ### Everyday analogy
 
-Imagine your bank key is a combination of 512 digits. To steal it, a thief would need to try an enormous number of combinations. But a quantum computer does this thousands of times faster. That's why banks are switching to **post-quantum cryptography** — keys become even longer (1024 digits), and your phone has to constantly process them.
+Imagine your bank uses a mathematical puzzle with hundreds of coordinates in a high-dimensional space. To steal your key, a thief would need to solve an enormously complex geometric problem. But a quantum computer makes this thousands of times faster. That's why banks are switching to **post-quantum cryptography** — the puzzles become even larger, and your phone has to constantly process them.
 
-**If Astra #7 is confirmed and applicable:** it might enable discussions about shorter keys (e.g., 305 digits instead of 512) while keeping the same protection. Your phone could run faster, apps could lag less, and the battery could drain slower. But this is still a research direction, not a deployed solution.
+**If Astra #7 is confirmed and applicable:** it might enable discussions about more efficient puzzles while keeping the same protection. Your phone could run faster, apps could lag less, and the battery could drain slower. But this is still a research direction, not a deployed solution.
 
 ### Where this is used
 - **Banking apps** (Sber, T-Bank, Revolut) — protecting transactions from quantum attacks.
@@ -265,7 +291,7 @@ Imagine your bank key is a combination of 512 digits. To steal it, a thief would
 - **IoT and smart home** — sensors and cameras with limited memory get cryptography without overload.
 
 ### What this demo shows
-1. **The Babai heuristic fails even at toy scale** — at n=24 it recovers 4% of the secret on this instance. At n=512 (reality) this is a completely different problem that this toy experiment does not address.
+1. **The Babai heuristic fails even at toy scale** — at n=24 it recovers 4% of the secret on this instance. At cryptographic dimensions, this toy experiment is not an attack-cost estimate.
 2. **Math directly affects your phone** — a new theorem, if confirmed, could inspire smaller keys and faster apps.
 3. **Verify yourself** — all code is open, runs on your phone in 0.5 seconds, no "magic" involved.
 
@@ -289,6 +315,10 @@ lattice-guard/
 ├── benchmark.py        # Performance benchmark (+ --export)
 ├── export.py           # Export results to JSON/CSV
 ├── test_lattice.py     # Unit tests (no pytest needed)
+├── gs_native.py        # Python bindings for optional C extension (Gram-Schmidt only)
+├── native/
+│   ├── gs_native.c     # Native Gram-Schmidt (C)
+│   └── build.sh        # Build script for Termux/Linux/macOS
 ├── setup.sh            # Termux setup script (robust)
 ├── requirements.txt    # Python dependencies
 ├── .gitignore          # Git ignore rules
@@ -344,6 +374,14 @@ This is expected. Try smaller dimensions:
 ```bash
 python benchmark.py --n 8 12 16 24
 ```
+
+### Native extension fails to compile
+Make sure you have a C compiler installed:
+```bash
+pkg install clang
+bash native/build.sh
+```
+If compilation fails, the project works fine without it — just ignore the warning.
 
 ---
 

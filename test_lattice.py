@@ -25,6 +25,13 @@ from lattice import (
     kyber_real_params,
 )
 
+# Пытаемся импортировать нативное расширение
+try:
+    from gs_native import gs_min_norm_native, NATIVE_AVAILABLE
+except Exception:
+    NATIVE_AVAILABLE = False
+    gs_min_norm_native = None
+
 
 class TestRunner:
     def __init__(self, verbose: bool = False):
@@ -39,6 +46,10 @@ class TestRunner:
     def run(self) -> int:
         print("=" * 62)
         print("  LatticeGuard — юнит-тесты")
+        if NATIVE_AVAILABLE:
+            print("  Нативное расширение: доступно")
+        else:
+            print("  Нативное расширение: недоступно (cd native && bash build.sh)")
         print("=" * 62)
         start = time.perf_counter()
 
@@ -158,21 +169,52 @@ def test_invalid_q():
 
 
 def test_singular_basis_warning():
-    # Создаём вырожденную матрицу
     B = np.ones((3, 3), dtype=np.int64)
     t = np.array([1, 2, 3], dtype=np.int64)
     try:
         babai_rounding(B, t)
-        # На некоторых платформах может не упасть из-за численной точности,
-        # поэтому просто проверяем, что функция не зависает
     except ValueError:
         pass  # Ожидаемое поведение
+
+
+# --- Тесты нативного расширения (только Gram-Schmidt) ---
+
+def test_native_gs_min_norm():
+    if not NATIVE_AVAILABLE:
+        return  # skip
+    A, _, _, _ = generate_lwe_instance(16, 97, seed=42)
+    r1 = gs_min_norm(A)
+    r2 = gs_min_norm_native(A)
+    assert abs(r1 - r2) < 1e-6, f"GS mismatch: {r1} vs {r2}"
+
+
+def test_native_gs_consistency():
+    if not NATIVE_AVAILABLE:
+        return
+    for n in [8, 16, 32, 64]:
+        A, _, _, _ = generate_lwe_instance(n, 97, seed=n)
+        r1 = gs_min_norm(A)
+        r2 = gs_min_norm_native(A)
+        assert abs(r1 - r2) < 1e-6, f"GS mismatch at n={n}: {r1} vs {r2}"
+
+
+def test_native_limits():
+    if not NATIVE_AVAILABLE:
+        return
+    # n > 64 должно вызывать ValueError
+    A, _, _, _ = generate_lwe_instance(65, 97, seed=1)
+    try:
+        gs_min_norm_native(A)
+        assert False, "Должно было возникнуть ValueError для n>64"
+    except ValueError:
+        pass
 
 
 def main() -> int:
     verbose = "-v" in sys.argv or "--verbose" in sys.argv
     runner = TestRunner(verbose=verbose)
 
+    # Core tests
     runner.add("LWE shape correctness", test_generate_lwe_shape)
     runner.add("LWE reproducibility", test_generate_lwe_reproducibility)
     runner.add("LWE modulo identity", test_generate_lwe_modulo)
@@ -186,6 +228,14 @@ def main() -> int:
     runner.add("Invalid n raises error", test_invalid_n)
     runner.add("Invalid q raises error", test_invalid_q)
     runner.add("Singular basis handling", test_singular_basis_warning)
+
+    # Native extension tests
+    if NATIVE_AVAILABLE:
+        runner.add("Native GS min norm", test_native_gs_min_norm)
+        runner.add("Native GS consistency (8-64)", test_native_gs_consistency)
+        runner.add("Native n>64 limit", test_native_limits)
+    else:
+        print("\n  [INFO] Нативные тесты пропущены — скомпилируйте: cd native && bash build.sh")
 
     return runner.run()
 

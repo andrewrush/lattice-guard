@@ -101,7 +101,7 @@ def demo_cvp_attack(n: int = 24, q: int = 97, seed: int = 42) -> dict[str, Any]:
 
     if matches < n:
         print(f"=> На этом случайном инстансе эвристика Бабаи НЕ восстановила секрет.")
-        print("=> Toy-эксперименты при n=24 НЕ оценивают стойкость при n=512.")
+        print("=> Toy-эксперименты при криптографических размерностях НЕ являются оценкой стоимости атаки.")
 
     # Multi-seed statistics
     stats = demo_cvp_statistics(n, q, num_seeds=100)
@@ -113,7 +113,7 @@ def demo_cvp_attack(n: int = 24, q: int = 97, seed: int = 42) -> dict[str, Any]:
 
     min_norm = gs_min_norm(A)
     print(f"\nМин. норма GS-ортогонализации: {min_norm:.2f}")
-    print("(На случайном базисе норма велика — эвристика обречена на провал)")
+    print("(На нередуцированном случайном базисе норма велика — эвристика Бабаи неэффективна для этого toy-инстанса)")
 
     return {
         "n": n,
@@ -172,8 +172,8 @@ def demo_attack_complexity() -> list[dict[str, Any]]:
             f"{c['astra_effective_bits']:>14.1f} | "
             f"+{c['boost_bits']:>4.1f}"
         )
-    print("\nAstra #7: полиномиальная трудность CVP-аппроксимации")
-    print("подразумевает дополнительные ~log₂(n) бит security в этой упрощённой модели.")
+    print("\nAstra #7: в рамках используемой упрощённой модели полиномиальная трудность CVP-аппроксимации")
+    print("моделируется как прирост примерно log₂(n) бит.")
     return results
 
 

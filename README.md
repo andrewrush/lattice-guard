@@ -284,15 +284,15 @@ Sample output (n=16):
 Parameters: n=16, q=97, seed=42
 
 Average basis vector length:
-  Random: 165.3
-  LLL:    25.4
-  Improvement: 6.5×
+  Random: 219.0
+  LLL:    98.9
+  Improvement: 2.2×
 
 Babai rounding — matches with secret:
-  Random basis: 1/16 (6%)
-  LLL basis:    1/16 (6%)
+  Random basis: 0/16 (0%)
+  LLL basis:    0/16 (0%)
 
-=> LLL makes the basis ~6× shorter,
+=> LLL makes the basis ~2× shorter,
 => but Babai rounding still does not recover the secret.
 => This toy experiment does not model the full range of lattice attacks against LWE, which may use approximate reduction, enumeration, sieving, decoding, or primal/dual strategies. LLL alone does not provide a concrete security estimate for LWE.
 ```
@@ -301,8 +301,8 @@ Babai rounding — matches with secret:
 
 | Basis type | Avg vector length | Babai match rate | Conclusion |
 |-----------|-------------------|------------------|------------|
-| Random | ~165 | ~6% | Bad basis, heuristic fails |
-| LLL-reduced | ~25 | ~6% | Good basis, heuristic **still** fails |
+| Random | ~219 | ~0% | Bad basis, heuristic fails |
+| LLL-reduced | ~99 | ~0% | Good basis, heuristic **still** fails |
 
 This is the core security argument for LWE: even with a high-quality basis, the **Closest Vector Problem** remains hard because the error vector `e` is carefully chosen to place the target point `b` far from any lattice vector. LLL helps with CVP *approximation*, but LWE is designed to resist exactly that.
 
@@ -333,14 +333,14 @@ The native extension implements **Gram-Schmidt orthogonalization** only. Babai r
 
 | n | Python (ms) | Native C (ms) | Speedup |
 |---|-------------|---------------|---------|
-| 8 | 0.55 | 0.23 | **2.4×** |
-| 16 | 1.76 | 0.11 | **16×** |
-| 32 | 6.76 | 0.25 | **27×** |
-| 64 | 27.10 | 0.48 | **57×** |
+| 8 | 0.57 | 0.22 | **2.6×** |
+| 16 | 1.85 | 0.11 | **17.5×** |
+| 32 | 7.15 | 0.18 | **39.7×** |
+| 64 | 28.87 | 0.45 | **64.8×** |
 
 The speedup grows with n because the Python implementation uses nested loops, while the C version eliminates interpreter overhead.
 
-**Numerical equivalence:** `max_abs_error(Python, C) < 1e-12` for all tested dimensions.
+**Numerical equivalence:** `max_abs_error(Python, C) = 8.44e-14` — all tested dimensions match to machine precision.
 
 > **Note:** These numbers measure only the explicit Gram–Schmidt loops. The main `benchmark.py` measures the complete NumPy-based routine (including `np.linalg.solve` for Babai), which is why its times differ. The native extension changes performance only; it does not change the security model or attack success probability.
 

@@ -179,7 +179,9 @@ is represented as an approximately log₂(n)-bit increase.
 
 **Important:** These numbers come from a **simplified theoretical model**, not from a full concrete-security analysis of ML-KEM. Real ML-KEM parameters involve compression, error distributions, Module-LWE structure, and failure probabilities that are not captured here.
 
-**Formula used:** `toy_key_size = n² · ⌈log₂(q)⌉ / 8` bytes. This is **not** the actual ML-KEM public key size.
+**Formula used:** `toy_key_size = n² · ⌈log₂(q)⌉ / 8` bytes.
+
+The `n²` term models a **dense generic matrix** and intentionally ignores ring/module compression. Real ML-KEM uses polynomial rings (ℤ_q[x]/(xⁿ+1)) and module structures, which compress the public key to ~800 bytes for ML-KEM-512. This formula is **not** the actual ML-KEM public key size.
 
 **Practical takeaway (if Astra #7 is confirmed):** stronger CVP bounds could enable discussions about more compact post-quantum parameters, but any real parameter change requires rigorous independent analysis.
 
@@ -304,7 +306,7 @@ Babai rounding — matches with secret:
 | Random | ~219 | ~0% | Bad basis, heuristic fails |
 | LLL-reduced | ~99 | ~0% | Good basis, heuristic **still** fails |
 
-This is the core security argument for LWE: even with a high-quality basis, the **Closest Vector Problem** remains hard because the error vector `e` is carefully chosen to place the target point `b` far from any lattice vector. LLL helps with CVP *approximation*, but LWE is designed to resist exactly that.
+This is an **intuition-building illustration**: even with a high-quality basis, the **Closest Vector Problem** remains hard because the error vector `e` is carefully chosen to place the target point `b` far from any lattice vector. LLL helps with CVP *approximation*, but this toy experiment does not establish resistance to practical LWE attacks.
 
 ### Where this fits in real cryptography
 
@@ -315,9 +317,9 @@ In lattice-based cryptography:
 - LLL alone cannot break properly parameterised LWE.
 
 ---
-## Native C Extension (Optional)
+## Native C Extension: Gram–Schmidt Benchmark (Optional)
 
-For educational comparison between Python and native C performance on Gram-Schmidt orthogonalization:
+For educational comparison between Python and native C performance on **explicit Gram–Schmidt orthogonalization loops** (not the full attack pipeline):
 
 ```bash
 # Compile
@@ -327,7 +329,7 @@ bash native/build.sh
 python gs_native.py
 ```
 
-The native extension implements **Gram-Schmidt orthogonalization** only. Babai rounding remains in Python (already fast enough at ~0.7 ms). The extension exists to demonstrate FFI and measure the Python interpreter overhead on tight loops.
+The native extension implements **Gram-Schmidt orthogonalization** only. Babai rounding remains in Python (fast enough for the toy dimensions used here). The extension exists to demonstrate FFI and measure the Python interpreter overhead on tight loops.
 
 **Measured speedup on Android 12 (aarch64):**
 

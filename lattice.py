@@ -11,6 +11,7 @@ from __future__ import annotations
 import warnings
 from typing import Tuple
 
+from numpy.typing import NDArray
 import numpy as np
 
 __all__ = [
@@ -21,12 +22,15 @@ __all__ = [
     "compare_security_params",
     "attack_complexity",
     "kyber_real_params",
+    "lll_reduction",
+    "compare_basis_quality",
+    "_gram_schmidt_coeffs",
 ]
 
 
 def generate_lwe_instance(
     n: int, q: int, seed: int | None = None
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+) -> Tuple[NDArray[np.int64], NDArray[np.int64], NDArray[np.int64], NDArray[np.int64]]:
     """
     Генерирует случайный LWE-инстанс (A, b = As + e mod q).
 
@@ -68,7 +72,7 @@ def generate_lwe_instance(
     return A, b, s, e
 
 
-def babai_rounding(B: np.ndarray, t: np.ndarray) -> np.ndarray:
+def babai_rounding(B: NDArray[np.int64], t: NDArray[np.int64]) -> NDArray[np.int64]:
     """
     Алгоритм Бабаи (rounding) для приближённого решения CVP.
 
@@ -115,7 +119,7 @@ def babai_rounding(B: np.ndarray, t: np.ndarray) -> np.ndarray:
     return v
 
 
-def gs_min_norm(B: np.ndarray) -> float:
+def gs_min_norm(B: NDArray[np.int64]) -> float:
     """
     Минимальная длина вектора Грама-Шмидта (оценка качества базиса).
 
@@ -155,7 +159,7 @@ def compare_security_params(security_bits: int = 128) -> dict:
     """
     Сравнивает параметры криптосистемы до и после результатов Astra.
 
-    Astra #7 доказала полиномиальную трудность аппроксимации CVP.
+    Astra #7 утверждает полиномиальную трудность аппроксимации CVP.
     Это позволяет использовать меньшую размерность n (~на 25-40%)
     при сохранении того же security level.
 
@@ -246,7 +250,7 @@ def kyber_real_params() -> list[dict]:
 
 
 
-def _gram_schmidt_coeffs(B: np.ndarray) -> tuple:
+def _gram_schmidt_coeffs(B: NDArray[np.int64]) -> tuple:
     """
     Модифицированный Грама-Шмидт с возвратом коэффициентов mu и норм.
 
@@ -271,7 +275,7 @@ def _gram_schmidt_coeffs(B: np.ndarray) -> tuple:
     return mu, norms
 
 
-def lll_reduction(B: np.ndarray, delta: float = 0.75) -> np.ndarray:
+def lll_reduction(B: NDArray[np.int64], delta: float = 0.75) -> NDArray[np.int64]:
     """
     Алгоритм LLL (Lenstra-Lenstra-Lovász) редукции решётки.
 
@@ -322,7 +326,7 @@ def lll_reduction(B: np.ndarray, delta: float = 0.75) -> np.ndarray:
     return np.rint(B_work).astype(np.int64)
 
 
-def compare_basis_quality(A: np.ndarray, s: np.ndarray, e: np.ndarray,
+def compare_basis_quality(A: NDArray[np.int64], s: NDArray[np.int64], e: NDArray[np.int64],
                           q: int = 97) -> dict:
     """
     Сравнивает качество разных типов базисов для атаки Babai.

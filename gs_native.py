@@ -21,6 +21,7 @@ import warnings
 from pathlib import Path
 from typing import Optional
 
+from numpy.typing import NDArray
 import numpy as np
 
 __all__ = ["gs_min_norm_native", "NATIVE_AVAILABLE"]

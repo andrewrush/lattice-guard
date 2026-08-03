@@ -172,8 +172,8 @@ is represented as an approximately log₂(n)-bit increase.
 
 | Metric | Before Astra | After Astra | Conclusion |
 |---------|-------------|-------------|------------|
-| n for 128-bit security (model) | 512 | **305** | −40% key size in toy model |
-| Toy-model public key (n=512→305) | 384 KB | **136 KB** | −248 KB in simplified estimate |
+| n for 128-bit security (model) | 512 | **305** | −40% dimension n |
+| Toy-model public key (bytes) | 393216 | **139520** | −64.5% bytes in toy model |
 | Security boost (model) | 149.5 bits | **158.5 bits** | +9 bits in simplified estimate |
 | Babai heuristic (n=24) | 4% match | — | Failed on this random instance |
 
@@ -461,7 +461,7 @@ If compilation fails, the project works fine without it — just ignore the warn
 
 - **LWE (Learning With Errors):** foundation of post-quantum cryptography (Kyber, Dilithium).
 - **CVP (Closest Vector Problem):** finding the nearest lattice vector to a given point.
-- **Astra #7:** proved polynomial hardness of CVP approximation — meaning even approximate solutions remain computationally hard (if the proof holds).
+- **Astra #7:** is reported to establish polynomial hardness of CVP approximation — meaning even approximate solutions remain computationally hard, if the result is confirmed and shown to apply to the relevant cryptographic setting.
 - **Babai rounding:** simplest CVP heuristic. On a random basis it is practically useless — as the demo shows.
 
 ## References

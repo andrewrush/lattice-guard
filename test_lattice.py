@@ -13,6 +13,7 @@ import sys
 import time
 import traceback
 
+from numpy.typing import NDArray
 import numpy as np
 
 from lattice import (

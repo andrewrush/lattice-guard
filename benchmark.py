@@ -21,6 +21,7 @@ import sys
 import time
 from typing import Any
 
+from numpy.typing import NDArray
 import numpy as np
 
 from lattice import generate_lwe_instance, babai_rounding, gs_min_norm

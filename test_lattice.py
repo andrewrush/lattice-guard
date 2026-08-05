@@ -23,6 +23,7 @@ from lattice import (
     generate_lwe_instance,
     gs_min_norm,
     key_size_bytes,
+    key_size_module_lwe,
     kyber_real_params,
     lll_reduction,
     _gram_schmidt_coeffs,
@@ -252,6 +253,37 @@ def test_lll_improves_norms():
     assert avg_after < avg_before, "LLL не уменьшил среднюю длину векторов"
 
 
+
+
+def test_key_size_module_lwe():
+    """Module-LWE даёт размеры близкие к реальному ML-KEM."""
+    # ML-KEM-512: ~672 bytes (реально 800)
+    size_512 = key_size_module_lwe(256, 3329, k=2, d_u=10)
+    assert 600 < size_512 < 900, f"ML-KEM-512 estimate: {size_512}"
+
+    # ML-KEM-768: ~992 bytes (реально 1184)
+    size_768 = key_size_module_lwe(256, 3329, k=3, d_u=10)
+    assert 900 < size_768 < 1300, f"ML-KEM-768 estimate: {size_768}"
+
+    # ML-KEM-1024: ~1440 bytes (реально 1568)
+    size_1024 = key_size_module_lwe(256, 3329, k=4, d_u=11)
+    assert 1300 < size_1024 < 1700, f"ML-KEM-1024 estimate: {size_1024}"
+
+
+def test_key_size_module_vs_generic():
+    """Module-LWE значительно компактнее generic LWE."""
+    generic = key_size_bytes(512, 3329)  # ~384 KB
+    module = key_size_module_lwe(256, 3329, k=2, d_u=10)  # ~672 bytes
+    assert module < generic // 100, "Module-LWE должен быть в ~500× компактнее"
+
+
+def test_compare_security_params_heuristic_comment():
+    """Проверяем, что compare_security_params возвращает корректные значения."""
+    r = compare_security_params(128)
+    assert r["n_before"] == 512
+    assert r["n_after"] < r["n_before"]
+    assert 0.2 < (r["n_before"] - r["n_after"]) / r["n_before"] < 0.5
+
 def main() -> int:
     verbose = "-v" in sys.argv or "--verbose" in sys.argv
     runner = TestRunner(verbose=verbose)
@@ -267,6 +299,9 @@ def main() -> int:
     runner.add("Security params comparison", test_compare_security_params)
     runner.add("Attack complexity boost", test_attack_complexity)
     runner.add("Kyber params structure", test_kyber_params)
+    runner.add("Module-LWE key size estimates", test_key_size_module_lwe)
+    runner.add("Module vs Generic size ratio", test_key_size_module_vs_generic)
+    runner.add("Security params heuristic range", test_compare_security_params_heuristic_comment)
     runner.add("Invalid n raises error", test_invalid_n)
     runner.add("Invalid q raises error", test_invalid_q)
     runner.add("Singular basis handling", test_singular_basis_warning)

@@ -175,6 +175,7 @@ is represented as an approximately log₂(n)-bit increase.
 | n for 128-bit security (model) | 512 | **305** | −40% dimension n |
 | Toy-model public key (bytes) | 393216 | **139520** | −64.5% bytes in toy model |
 | Security boost (model) | 149.5 bits | **158.5 bits** | +9 bits in simplified estimate |
+| Module-LWE estimate (n=256,k=2) | 672 bytes | **672 bytes** | ~0.66 KB (real ML-KEM: 800) |
 | Babai heuristic (n=24) | 4% match | — | Failed on this random instance |
 
 **Important:** These numbers come from a **simplified theoretical model**, not from a full concrete-security analysis of ML-KEM. Real ML-KEM parameters involve compression, error distributions, Module-LWE structure, and failure probabilities that are not captured here.

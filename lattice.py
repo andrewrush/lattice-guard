@@ -3,7 +3,7 @@ LatticeGuard — демо постквантовой криптографии н
 Основано на прорыве Astra #7: polynomial-factor hardness of approximation for CVP.
 
 Модуль содержит ядро проекта: генерация LWE-инстансов, эвристика Бабаи,
-ортогонализация Грама-Шмидта и оценки параметров безопасности.
+ортогонализация Грама-Шмидта, LLL-редукция и оценки параметров безопасности.
 """
 
 from __future__ import annotations
@@ -19,6 +19,7 @@ __all__ = [
     "babai_rounding",
     "gs_min_norm",
     "key_size_bytes",
+    "key_size_module_lwe",
     "compare_security_params",
     "attack_complexity",
     "kyber_real_params",
@@ -150,9 +151,56 @@ def gs_min_norm(B: NDArray[np.int64]) -> float:
 
 
 def key_size_bytes(n: int, q: int) -> int:
-    """Оценка размера публичного ключа в байтах."""
+    """
+    Оценка размера публичного ключа в байтах для generic LWE (плотная матрица).
+
+    Формула: n² · ⌈log₂(q)⌉ / 8
+    Моделирует плотную n×n матрицу без сжатия.
+    """
     bits_per_entry = int(np.ceil(np.log2(q)))
     return (n * n * bits_per_entry) // 8
+
+
+def key_size_module_lwe(n: int, q: int, k: int = 2, d_u: int = 10) -> int:
+    """
+    Оценка размера публичного ключа для Module-LWE (ML-KEM-подобная схема).
+
+    В отличие от generic LWE (плотная n×n матрица), Module-LWE:
+    - Генерирует A из seed (32 байта вместо n² коэффициентов)
+    - Использует полиномиальное кольцо ℤ_q[x]/(xⁿ+1)
+    - Сжимает коэффициенты t-вектора до d_u бит
+
+    Формула (упрощённая toy-модель):
+        pk = seed_A + k · n · d_u / 8
+
+    Параметры
+    ----------
+    n : int
+        Размерность полиномиального кольца (степень xⁿ+1).
+        В ML-KEM: n = 256 для всех уровней безопасности.
+    q : int
+        Модуль поля (например, 3329 для Kyber).
+    k : int, default 2
+        Ранг модуля. ML-KEM-512: k=2, ML-KEM-768: k=3, ML-KEM-1024: k=4.
+    d_u : int, default 10
+        Битовая точность сжатия t-вектора.
+        ML-KEM-512/768: d_u=10, ML-KEM-1024: d_u=11.
+
+    Returns
+    -------
+    int
+        Размер публичного ключа в байтах (toy-оценка).
+
+    Notes
+    -----
+    Это упрощённая модель. Реальный ML-KEM добавляет дополнительные
+    байты для метаданных, поэтому реальные размеры (800/1184/1568 bytes)
+    немного больше этой оценки. Главная цель — показать порядок
+    величины: ~0.8 KB (Module-LWE) vs ~384 KB (generic LWE).
+    """
+    seed_bytes = 32  # SHA3-512 seed для детерминированной генерации A
+    t_compressed = k * n * d_u // 8
+    return seed_bytes + t_compressed
 
 
 def compare_security_params(security_bits: int = 128) -> dict:
@@ -172,6 +220,15 @@ def compare_security_params(security_bits: int = 128) -> dict:
     -------
     dict
         Словарь с параметрами до и после Astra.
+
+    Notes
+    -----
+    Коэффициент 0.25 в формуле boost — HEURISTIC PLACEHOLDER.
+    Astra #7 сообщает о полиномиальной трудности CVP-аппроксимации,
+    но конкретный фактор для криптографических параметров требует
+    отдельного concrete-security анализа. Здесь boost моделируется
+    как ~log₁₀(n) с эмпирическим коэффициентом 0.25 для наглядности
+    в toy-модели. Это НЕ доказанная оценка для ML-KEM.
     """
     q = 3329  # модуль, как в Kyber
 
@@ -184,7 +241,9 @@ def compare_security_params(security_bits: int = 128) -> dict:
     else:
         n_before = security_bits * 4  # грубая эвристика
 
-    # Полиномиальная hardness даёт boost ~log(n)
+    # HEURISTIC: полиномиальная hardness даёт boost ~log(n).
+    # Коэффициент 0.25 — placeholder для toy-модели.
+    # См. Notes в docstring.
     boost = 1 + 0.25 * np.log10(n_before)
     n_after = int(n_before / boost)
 
@@ -247,7 +306,6 @@ def kyber_real_params() -> list[dict]:
         {"name": "ML-KEM-768", "n": 768, "q": 3329, "eta": 2, "du": 10, "dv": 4, "pk_bytes": 1184, "sk_bytes": 2400, "ct_bytes": 1088},
         {"name": "ML-KEM-1024", "n": 1024, "q": 3329, "eta": 2, "du": 11, "dv": 5, "pk_bytes": 1568, "sk_bytes": 3168, "ct_bytes": 1568},
     ]
-
 
 
 def _gram_schmidt_coeffs(B: NDArray[np.int64]) -> tuple:

@@ -26,6 +26,7 @@ from lattice import (
     compare_security_params,
     generate_lwe_instance,
     gs_min_norm,
+    key_size_module_lwe,
     kyber_real_params,
     lll_reduction,
 )
@@ -39,24 +40,44 @@ def print_header() -> None:
 
 
 def demo_security_comparison() -> list[dict[str, Any]]:
-    print("\n--- Сравнение параметров безопасности (упрощённая модель) ---")
+    print("\n--- Сравнение параметров: Generic LWE vs Module-LWE (toy-модель) ---")
     print(
         f"{'Level':>8} | {'n до':>6} | {'n после':>7} | "
-        f"{'Ключ до':>9} | {'Ключ после':>10} | {'Экономия':>8}"
+        f"{'Generic до':>11} | {'Generic после':>13} | {'Module-LWE':>11}"
     )
-    print("-" * 62)
+    print("-" * 72)
     results = []
     for bits in (128, 192, 256):
         r = compare_security_params(bits)
-        results.append(r)
+
+        # Параметры Module-LWE (ML-KEM-подобные)
+        # n=256 — размерность полиномиального кольца для всех уровней ML-KEM
+        if bits == 128:
+            k, d_u = 2, 10  # ML-KEM-512
+        elif bits == 192:
+            k, d_u = 3, 10  # ML-KEM-768
+        else:
+            k, d_u = 4, 11  # ML-KEM-1024
+
+        module_bytes = key_size_module_lwe(256, r["q"], k=k, d_u=d_u)
+        module_kb = round(module_bytes / 1024, 2)
+
         print(
             f"{r['security_bits']:>6}-bit | "
             f"{r['n_before']:>6} | "
             f"{r['n_after']:>7} | "
-            f"{r['key_before_kb']:>7.1f} KB | "
-            f"{r['key_after_kb']:>8.1f} KB | "
-            f"{r['saved_percent']:>6.1f}%"
+            f"{r['key_before_kb']:>9.1f} KB | "
+            f"{r['key_after_kb']:>11.1f} KB | "
+            f"{module_kb:>8.2f} KB"
         )
+        r["module_kb"] = module_kb
+        r["module_bytes"] = module_bytes
+        results.append(r)
+
+    print("\nПримечание:")
+    print("  • Generic — плотная n×n матрица без сжатия (toy-модель)")
+    print("  • Module-LWE — polynomial ring + seed-based A + сжатие (близко к ML-KEM)")
+    print("  • Реальный ML-KEM: 800/1184/1568 bytes (доп. метаданные не учтены)")
     return results
 
 
@@ -297,8 +318,7 @@ def main() -> None:
     print("=" * 62)
 
     if args.json:
-        # JSON выводим в stderr, чтобы не мешать основному stdout (если piping)
-        print("\n--- JSON Output ---", file=sys.stderr)
+        # JSON выводим в stderr, чтобы не мешать основному выводу
         print(json.dumps(results, indent=2, ensure_ascii=False), file=sys.stderr)
 
 

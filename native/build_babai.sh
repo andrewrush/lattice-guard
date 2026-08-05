@@ -22,18 +22,17 @@ fi
 CFLAGS="-O3 -Wall -Wextra -fPIC"
 
 if [ "$OS" = "Darwin" ]; then
-    OUT="babai_native.dylib"
+    OUT="libbabai.dylib"
     LDFLAGS="-dynamiclib"
 else
-    OUT="babai_native.so"
+    OUT="libbabai.so"
     LDFLAGS="-shared"
 fi
 
 cd "$(dirname "$0")"
 $CC $CFLAGS -c babai.c -o babai.o
 $CC $LDFLAGS -o $OUT babai.o -lm
-cp $OUT ../
 rm -f babai.o
 
-echo "=== Built: $OUT ==="
+echo "=== Built: native/$OUT ==="
 echo "Optional. Project works fine without it."

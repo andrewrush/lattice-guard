@@ -1,44 +1,21 @@
 #include "babai.h"
 #include <math.h>
-#include <string.h>
 #include <stdlib.h>
+#include <string.h>
 
 #define EPSILON 1e-12
 
-static inline double dot(const double *a, const double *b, size_t n) {
-    double s = 0.0;
-    for (size_t i = 0; i < n; i++) s += a[i] * b[i];
-    return s;
-}
-
-static inline void vec_sub(double *out, const double *a, const double *b, size_t n) {
-    for (size_t i = 0; i < n; i++) out[i] = a[i] - b[i];
-}
-
-static inline void vec_scale_sub(double *out, const double *a, double scale, const double *b, size_t n) {
-    for (size_t i = 0; i < n; i++) out[i] = a[i] - scale * b[i];
-}
-
-/* Модифицированный Gram-Schmidt (row-major) */
-static int mgs(const double *basis, double *gs, double *mu, size_t n) {
-    if (!basis || !gs || !mu || n == 0) return -1;
-    memset(mu, 0, n * n * sizeof(double));
-
-    for (size_t i = 0; i < n; i++) {
-        memcpy(&gs[i * n], &basis[i * n], n * sizeof(double));
-        for (size_t j = 0; j < i; j++) {
-            double num = dot(&basis[i * n], &gs[j * n], n);
-            double den = dot(&gs[j * n], &gs[j * n], n);
-            if (fabs(den) < EPSILON) return -1;
-            mu[i * n + j] = num / den;
-            for (size_t k = 0; k < n; k++)
-                gs[i * n + k] -= mu[i * n + j] * gs[j * n + k];
-        }
-        if (dot(&gs[i * n], &gs[i * n], n) < EPSILON) return -1;
-    }
-    return 0;
-}
-
+/*
+ * Babai coefficient rounding — решает B*c = t, округляет c,
+ * возвращает B * round(c).
+ * 
+ * Это тот же алгоритм, что Python babai_rounding:
+ *   coeffs = np.linalg.solve(B, t)
+ *   rounded = np.round(coeffs)
+ *   v = B @ rounded
+ * 
+ * Реализован через Gaussian elimination с частичным выбором главного элемента.
+ */
 int babai_rounding_c(
     const double *basis,
     const double *target,
@@ -46,82 +23,148 @@ int babai_rounding_c(
     size_t n
 ) {
     if (!basis || !target || !result || n == 0) return -1;
-    if (n > 256) return -1;  /* safety limit for educational demo */
+    if (n > 256) return -1;
 
-    double *gs = (double *)malloc(n * n * sizeof(double));
-    double *mu = (double *)malloc(n * n * sizeof(double));
-    double *work = (double *)malloc(n * sizeof(double));
-    double *current = (double *)malloc(n * sizeof(double));
+    /* Копируем basis и target для модификации */
+    double *A = (double *)malloc(n * n * sizeof(double));
+    double *b = (double *)malloc(n * sizeof(double));
+    double *c = (double *)malloc(n * sizeof(double));
 
-    if (!gs || !mu || !work || !current) {
-        free(gs); free(mu); free(work); free(current);
+    if (!A || !b || !c) {
+        free(A); free(b); free(c);
         return -1;
     }
 
-    if (mgs(basis, gs, mu, n) != 0) {
-        free(gs); free(mu); free(work); free(current);
-        return -1;
-    }
+    memcpy(A, basis, n * n * sizeof(double));
+    memcpy(b, target, n * sizeof(double));
 
-    memcpy(current, target, n * sizeof(double));
-
-    for (int i = (int)n - 1; i >= 0; i--) {
-        double num = dot(current, &gs[i * n], n);
-        double den = dot(&gs[i * n], &gs[i * n], n);
-        if (fabs(den) < EPSILON) {
-            free(gs); free(mu); free(work); free(current);
-            return -1;
+    /* Gaussian elimination with partial pivoting */
+    for (size_t col = 0; col < n; col++) {
+        /* Find pivot row */
+        size_t pivot = col;
+        double max_val = fabs(A[col * n + col]);
+        for (size_t row = col + 1; row < n; row++) {
+            if (fabs(A[row * n + col]) > max_val) {
+                max_val = fabs(A[row * n + col]);
+                pivot = row;
+            }
         }
-        double c = num / den;
-        long rounded = (long)round(c);
-        vec_scale_sub(current, current, (double)rounded, &basis[i * n], n);
+        if (max_val < EPSILON) {
+            free(A); free(b); free(c);
+            return -1; /* Singular matrix */
+        }
+
+        /* Swap rows */
+        if (pivot != col) {
+            for (size_t j = 0; j < n; j++) {
+                double tmp = A[col * n + j];
+                A[col * n + j] = A[pivot * n + j];
+                A[pivot * n + j] = tmp;
+            }
+            double tmp = b[col];
+            b[col] = b[pivot];
+            b[pivot] = tmp;
+        }
+
+        /* Eliminate below */
+        for (size_t row = col + 1; row < n; row++) {
+            double factor = A[row * n + col] / A[col * n + col];
+            for (size_t j = col; j < n; j++) {
+                A[row * n + j] -= factor * A[col * n + j];
+            }
+            b[row] -= factor * b[col];
+        }
     }
 
-    vec_sub(result, target, current, n);
+    /* Back substitution */
+    for (int i = (int)n - 1; i >= 0; i--) {
+        c[i] = b[i];
+        for (size_t j = i + 1; j < n; j++) {
+            c[i] -= A[i * n + j] * c[j];
+        }
+        c[i] /= A[i * n + i];
+    }
 
-    free(gs); free(mu); free(work); free(current);
+    /* Round coefficients and compute result = basis @ round(c) */
+    for (size_t i = 0; i < n; i++) {
+        result[i] = 0.0;
+        for (size_t j = 0; j < n; j++) {
+            result[i] += basis[i * n + j] * round(c[j]);
+        }
+    }
+
+    free(A); free(b); free(c);
     return 0;
 }
 
+/*
+ * Быстрая версия с предвыделенной памятью для бенчмарков.
+ * НЕ потокобезопасна! Вызывающий должен выделить:
+ *   workspace: n*n + n + n doubles (достаточно n*n + 2*n)
+ */
 int babai_rounding_fast_c(
     const double *basis,
     const double *target,
     double *result,
     size_t n,
-    double *gs_workspace,
-    double *mu_workspace
+    double *workspace,
+    double *workspace2
 ) {
-    if (!basis || !target || !result || !gs_workspace || !mu_workspace || n == 0) return -1;
+    if (!basis || !target || !result || !workspace || !workspace2 || n == 0) return -1;
     if (n > 256) return -1;
 
-    double *work = (double *)malloc(n * sizeof(double));
-    double *current = (double *)malloc(n * sizeof(double));
-    if (!work || !current) {
-        free(work); free(current);
-        return -1;
-    }
+    double *A = workspace;
+    double *b = workspace2;
+    double *c = workspace2 + n;
 
-    if (mgs(basis, gs_workspace, mu_workspace, n) != 0) {
-        free(work); free(current);
-        return -1;
-    }
+    memcpy(A, basis, n * n * sizeof(double));
+    memcpy(b, target, n * sizeof(double));
 
-    memcpy(current, target, n * sizeof(double));
+    for (size_t col = 0; col < n; col++) {
+        size_t pivot = col;
+        double max_val = fabs(A[col * n + col]);
+        for (size_t row = col + 1; row < n; row++) {
+            if (fabs(A[row * n + col]) > max_val) {
+                max_val = fabs(A[row * n + col]);
+                pivot = row;
+            }
+        }
+        if (max_val < EPSILON) return -1;
+
+        if (pivot != col) {
+            for (size_t j = 0; j < n; j++) {
+                double tmp = A[col * n + j];
+                A[col * n + j] = A[pivot * n + j];
+                A[pivot * n + j] = tmp;
+            }
+            double tmp = b[col];
+            b[col] = b[pivot];
+            b[pivot] = tmp;
+        }
+
+        for (size_t row = col + 1; row < n; row++) {
+            double factor = A[row * n + col] / A[col * n + col];
+            for (size_t j = col; j < n; j++) {
+                A[row * n + j] -= factor * A[col * n + j];
+            }
+            b[row] -= factor * b[col];
+        }
+    }
 
     for (int i = (int)n - 1; i >= 0; i--) {
-        double num = dot(current, &gs_workspace[i * n], n);
-        double den = dot(&gs_workspace[i * n], &gs_workspace[i * n], n);
-        if (fabs(den) < EPSILON) {
-            free(work); free(current);
-            return -1;
+        c[i] = b[i];
+        for (size_t j = i + 1; j < n; j++) {
+            c[i] -= A[i * n + j] * c[j];
         }
-        double c = num / den;
-        long rounded = (long)round(c);
-        vec_scale_sub(current, current, (double)rounded, &basis[i * n], n);
+        c[i] /= A[i * n + i];
     }
 
-    vec_sub(result, target, current, n);
+    for (size_t i = 0; i < n; i++) {
+        result[i] = 0.0;
+        for (size_t j = 0; j < n; j++) {
+            result[i] += basis[i * n + j] * round(c[j]);
+        }
+    }
 
-    free(work); free(current);
     return 0;
 }

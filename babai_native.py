@@ -19,9 +19,9 @@ from numpy.typing import NDArray
 
 _SYSTEM = platform.system()
 if _SYSTEM == "Darwin":
-    _LIB_NAME = "babai_native.dylib"
+    _LIB_NAME = "libbabai.dylib"
 else:
-    _LIB_NAME = "babai_native.so"
+    _LIB_NAME = "libbabai.so"
 
 _LIB = None
 _LIB_PATH = os.path.join(os.path.dirname(__file__), "native", _LIB_NAME)
@@ -58,7 +58,12 @@ def babai_rounding_native(
     basis: NDArray[np.float64],
     target: NDArray[np.float64]
 ) -> NDArray[np.float64]:
-    """Babai rounding через нативную C-библиотеку."""
+    """
+    Babai rounding через нативную C-библиотеку.
+
+    C-версия реализует coefficient rounding (как Python babai_rounding):
+    решает basis * c = target, округляет c, возвращает basis @ round(c).
+    """
     if not is_available():
         raise RuntimeError("Native babai library not available. Build: cd native && bash build_babai.sh")
 
